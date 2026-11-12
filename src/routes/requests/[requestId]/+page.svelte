@@ -63,8 +63,7 @@
 	const target = $derived(request && { requestId, title: request.title });
 	/**
 	 * The day the page is about: the one tapped on the Days tab, else today. Shown when it's on the Days tab
-	 * that day (scheduled, skipped or not, or marked prayed), except today skipped without asking for it (the
-	 * Skipped list brings it back).
+	 * that day: scheduled (skipped or not), or marked prayed.
 	 */
 	const day = $derived.by(() => {
 		if (!request) return undefined;
@@ -79,7 +78,6 @@
 		const skipped = scheduled && request.skipDates.includes(date);
 		const prayed = request.prayedDates.includes(date);
 		if (!scheduled && !prayed) return undefined;
-		if (skipped && !dayParam) return undefined;
 		return { date, scheduled, skipped, prayed };
 	});
 	const skippedAhead = $derived(request?.skipDates.filter((d) => d >= today.current) ?? []);
