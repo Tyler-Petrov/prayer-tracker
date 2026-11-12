@@ -87,7 +87,12 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # SvelteKit checks that every variable in src/env.ts is set when it analyses routes during the build.
+      # CLERK_SECRET_KEY isn't static: the Worker reads the real value from its secret at runtime, so the
+      # build only needs it present, and empty is enough.
       - name: Build
+        env:
+          CLERK_SECRET_KEY: ''
         run: pnpm build
 
       # Uploads a new Worker version without deploying it to any traffic.
