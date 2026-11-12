@@ -110,7 +110,8 @@
 			? [
 					...request.upcoming.map((date) => ({ date, skipped: false })),
 					...request.skipDates
-						.filter((d) => d >= today.current)
+						// Answered, its schedule ends that day: a skip after it can't come back.
+						.filter((d) => d >= today.current && (!request.answeredOn || d <= request.answeredOn))
 						.map((date) => ({ date, skipped: true }))
 				]
 					.filter(({ date }) => date !== day?.date)
@@ -244,7 +245,7 @@
 		<Button
 			variant={phone ? 'ghost' : 'outline'}
 			size={phone ? 'icon' : 'default'}
-			class={phone ? 'size-10' : 'h-10 px-3'}
+			class={phone ? 'size-11' : 'h-10 px-3'}
 			aria-label={phone ? 'Edit' : undefined}
 			onclick={() => setEditing(true)}
 		>
@@ -254,7 +255,13 @@
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
-					<Button {...props} variant="ghost" size="icon" class="size-10" aria-label="More">
+					<Button
+						{...props}
+						variant="ghost"
+						size="icon"
+						class={phone ? 'size-11' : 'size-10'}
+						aria-label="More"
+					>
 						<Ellipsis />
 					</Button>
 				{/snippet}
@@ -377,7 +384,7 @@
 											<span class="text-muted-foreground">{dateLabel(date, today.current)}</span>
 											<Button
 												variant="ghost"
-												class="h-9 px-2 text-candle"
+												class="h-11 px-2 text-candle"
 												onclick={() =>
 													target &&
 													actions.skip(

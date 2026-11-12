@@ -403,6 +403,7 @@
 			type="button"
 			variant={phone ? 'outline' : 'ghost'}
 			class={phone ? 'h-11 flex-1' : 'h-10 px-3'}
+			disabled={saving}
 			onclick={() => (open = false)}
 		>
 			Cancel
@@ -430,7 +431,8 @@
 					aria-describedby={draft.tried && titleProblem ? `${formId}-title-error` : undefined}
 					class={[field, 'font-display text-3xl tracking-tight md:text-4xl']}
 					onkeydown={(event) => {
-						if (event.key !== 'Enter') return;
+						// Not while an input method is composing: its Enter picks the characters.
+						if (event.key !== 'Enter' || event.isComposing) return;
 						event.preventDefault();
 						event.currentTarget.form?.requestSubmit();
 					}}></textarea>
@@ -521,7 +523,9 @@
 		</form>
 
 		{#snippet footer()}
-			<Button variant="outline" class="h-11" onclick={() => (open = false)}>Cancel</Button>
+			<Button variant="outline" class="h-11" disabled={saving} onclick={() => (open = false)}>
+				Cancel
+			</Button>
 			<Button type="submit" form={formId} class="h-11" disabled={saving}>
 				{#if saving}<Spinner />{/if}
 				{target.kind === 'edit' ? 'Save' : 'Add request'}
