@@ -2,9 +2,12 @@
 	import type { Id } from '#convex/_generated/dataModel.js';
 	import type { Schedule } from '#convex/shared/recurrence.js';
 
-	/** Adding one (starting on `day`), or changing one. */
+	/**
+	 * Adding one (starting on `day`; `fromDay` when added from that day on the Days tab, so the day is already
+	 * chosen and isn't asked again), or changing one.
+	 */
 	export type EditorTarget =
-		| { kind: 'add'; day: string }
+		| { kind: 'add'; day: string; fromDay?: boolean }
 		| {
 				kind: 'edit';
 				request: {
@@ -165,6 +168,8 @@
 		};
 	});
 
+	// Added from a day on the Days tab: that's the day it starts, so it isn't asked again.
+	const fromDay = $derived(target.kind === 'add' && target.fromDay ? target.day : null);
 	const titleProblem = $derived(draft.title.trim() ? null : 'Give it a title');
 	// Answered, it can't start after the answer (requests.update says the same).
 	const answeredOn = $derived(target.kind === 'edit' ? target.request.answeredOn : null);
@@ -232,7 +237,9 @@
 <AdaptiveSheet
 	bind:open
 	title={target.kind === 'edit' ? 'Edit request' : 'New request'}
-	description={target.kind === 'add' ? 'Something to pray for, once or on a schedule.' : undefined}
+	description={target.kind === 'add'
+		? `Something to pray for${fromDay ? ` ${dayName(fromDay, today.current, weekStart, true)}` : ''}, once or on a schedule.`
+		: undefined}
 >
 	<form id={formId} class="flex flex-col gap-6 pt-1 pb-2" onsubmit={save} novalidate>
 		<div class="flex flex-col gap-2">
@@ -267,10 +274,12 @@
 			/>
 		</div>
 
-		<div class="flex flex-col gap-2">
-			<Label for="{formId}-start">{draft.choice === 'none' ? 'Day' : 'Starts'}</Label>
-			<DateField id="{formId}-start" bind:value={draft.startDate} {weekStart} />
-		</div>
+		{#if !fromDay}
+			<div class="flex flex-col gap-2">
+				<Label for="{formId}-start">{draft.choice === 'none' ? 'Day' : 'Starts'}</Label>
+				<DateField id="{formId}-start" bind:value={draft.startDate} {weekStart} />
+			</div>
+		{/if}
 
 		<fieldset class="flex flex-col gap-3">
 			<legend class="mb-2 text-sm font-medium">Repeat</legend>

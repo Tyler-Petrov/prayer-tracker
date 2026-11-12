@@ -334,7 +334,7 @@
 	let editorTarget = $state.raw<EditorTarget>({ kind: 'add', day: today.current });
 
 	function add(day: string) {
-		editorTarget = { kind: 'add', day };
+		editorTarget = { kind: 'add', day, fromDay: true };
 		editorOpen = true;
 	}
 	function edit(requestId: Id<'requests'>) {
