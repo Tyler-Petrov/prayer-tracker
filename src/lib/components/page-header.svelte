@@ -7,7 +7,8 @@
 		title,
 		description,
 		back,
-		actions
+		actions,
+		centerActions = false
 	}: {
 		title: string;
 		description?: string;
@@ -15,6 +16,8 @@
 		back?: { href: string; label: string };
 		/** Buttons shown on the right, next to the title. */
 		actions?: Snippet;
+		/** Centers the actions against the whole header (Back, title and description) instead of the top. */
+		centerActions?: boolean;
 	} = $props();
 
 	// Coming from the page it links to, Back steps back in history instead, so that page is as it was left
@@ -56,7 +59,7 @@
 			<p class="mt-1 text-sm text-muted-foreground">{description}</p>
 		{/if}
 	</div>
-	<div class="flex shrink-0 items-center gap-2">
+	<div class={['flex shrink-0 items-center gap-2', centerActions && 'self-center']}>
 		{@render actions?.()}
 	</div>
 </header>

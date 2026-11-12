@@ -124,6 +124,14 @@
 	html {
 		scrollbar-gutter: stable;
 	}
+	/* The Days tab's endless list (a class the page puts on html): no scrollbar, which says nothing there, but
+	   still its room, so switching tabs doesn't shift the page. Safari reads the -webkit- one. */
+	html.hide-scrollbar {
+		scrollbar-color: transparent transparent;
+	}
+	html.hide-scrollbar::-webkit-scrollbar-thumb {
+		background: transparent;
+	}
 	body {
 		@apply bg-background text-foreground;
 	}
@@ -173,5 +181,29 @@
 		animation: none;
 		background: color-mix(in oklab, var(--candle) 12%, transparent);
 		box-shadow: 0 0 0 0.5rem color-mix(in oklab, var(--candle) 12%, transparent);
+	}
+}
+
+/* A request's page and its editor (startViewTransition): everything crossfades (the title, in the same place
+   on both, holds still), and the body below fades out and the other rises in. */
+::view-transition-old(root),
+::view-transition-new(root) {
+	animation-duration: 180ms;
+}
+::view-transition-old(request-body) {
+	animation: 120ms ease-in both view-fade-out;
+}
+::view-transition-new(request-body) {
+	animation: 260ms cubic-bezier(0.2, 0, 0, 1) 60ms both view-rise-in;
+}
+@keyframes view-fade-out {
+	to {
+		opacity: 0;
+	}
+}
+@keyframes view-rise-in {
+	from {
+		opacity: 0;
+		transform: translateY(0.5rem);
 	}
 }

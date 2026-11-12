@@ -61,10 +61,19 @@
 		open = $bindable(false),
 		target,
 		weekStart,
+		inline = false,
+		focus,
 		onsaved
 	}: {
 		open: boolean;
 		target: EditorTarget;
+		/**
+		 * In place of the request's page, laid out like it (Meal Tracker's recipe editor): the title edited where
+		 * it sits, Save and Cancel beside it (in a bar above the tabs on phones). Shown while `open`.
+		 */
+		inline?: boolean;
+		/** In place: the field to start in. */
+		focus?: 'notes';
 		/** The person's first day of the week: the weekday order, and how new "every N weeks" rules count. */
 		weekStart: WeekStart;
 		/** Called with the request once it's saved. */
@@ -232,66 +241,95 @@
 			saving = false;
 		}
 	}
+
+	// In place, the text is edited where it shows on the page, and the fields grow with it (from Meal Tracker).
+	const field =
+		'-mx-2 w-full resize-none rounded-md bg-transparent px-2 field-sizing-content outline-none transition-colors placeholder:text-muted-foreground/60 hover:bg-card focus-visible:bg-card focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:ring-3 aria-invalid:ring-tomato/40';
 </script>
 
-<AdaptiveSheet
-	bind:open
-	title={target.kind === 'edit' ? 'Edit request' : 'New request'}
-	description={target.kind === 'add'
-		? `Something to pray for${fromDay ? ` ${dayName(fromDay, today.current, weekStart, true)}` : ''}, once or on a schedule.`
-		: undefined}
->
-	<form id={formId} class="flex flex-col gap-6 pt-1 pb-2" onsubmit={save} novalidate>
+{#snippet scheduleFields()}
+	{#if !fromDay}
 		<div class="flex flex-col gap-2">
-			<Label for="{formId}-title">Title</Label>
-			<Input
-				id="{formId}-title"
-				bind:value={draft.title}
-				placeholder="Who or what to pray for"
-				autocomplete="off"
-				enterkeyhint="done"
-				maxlength={200}
-				class="h-11"
-				aria-invalid={draft.tried && !!titleProblem}
-				aria-describedby={draft.tried && titleProblem ? `${formId}-title-error` : undefined}
-			/>
-			{#if draft.tried && titleProblem}
-				<p id="{formId}-title-error" class="text-sm text-tomato">{titleProblem}</p>
-			{/if}
+			<Label for="{formId}-start">{draft.choice === 'none' ? 'Day' : 'Starts'}</Label>
+			<DateField id="{formId}-start" bind:value={draft.startDate} {weekStart} />
 		</div>
+	{/if}
 
-		<div class="flex flex-col gap-2">
-			<Label for="{formId}-notes">
-				Notes <span class="font-normal text-muted-foreground">(optional)</span>
-			</Label>
-			<Textarea
-				id="{formId}-notes"
-				bind:value={draft.notes}
-				placeholder="Details, names, a verse…"
-				rows={3}
-				maxlength={5000}
-				class="max-h-48"
-			/>
-		</div>
+	<fieldset class="flex flex-col gap-3">
+		<legend class="mb-2 text-sm font-medium">Repeat</legend>
+		<ToggleGroup.Root
+			type="single"
+			variant="outline"
+			spacing={2}
+			class="w-full flex-wrap"
+			bind:value={() => draft.choice, setChoice}
+			aria-label="Repeat"
+		>
+			{#each CHOICES as option (option.value)}
+				<ToggleGroup.Item
+					value={option.value}
+					class="h-10 rounded-full px-4 text-muted-foreground data-[state=on]:border-candle/60 data-[state=on]:bg-candle/12 data-[state=on]:text-candle"
+				>
+					{option.label}
+				</ToggleGroup.Item>
+			{/each}
+		</ToggleGroup.Root>
 
-		{#if !fromDay}
-			<div class="flex flex-col gap-2">
-				<Label for="{formId}-start">{draft.choice === 'none' ? 'Day' : 'Starts'}</Label>
-				<DateField id="{formId}-start" bind:value={draft.startDate} {weekStart} />
+		{#if draft.choice === 'days'}
+			<div transition:slide={{ duration: 150 }}>
+				<NumberStepper
+					bind:value={draft.days}
+					min={2}
+					max={MAX_INTERVAL}
+					before="Every"
+					noun="days"
+				/>
+			</div>
+		{:else if draft.choice === 'weekly' || draft.choice === 'monthly' || draft.choice === 'yearly'}
+			<div class="flex flex-col gap-3" transition:slide={{ duration: 150 }}>
+				{#if draft.choice === 'weekly'}
+					<ToggleGroup.Root
+						type="multiple"
+						variant="outline"
+						spacing={1}
+						class="w-full justify-between sm:justify-start"
+						bind:value={() => weekdays, (days: string[]) => (draft.weekdays = days as Weekday[])}
+						aria-label="Days of the week"
+					>
+						{#each orderedWeekdays as day (day)}
+							<ToggleGroup.Item
+								value={day}
+								aria-label={DAY_NAMES[day]}
+								class="size-10 rounded-full p-0 text-muted-foreground data-[state=on]:border-candle/60 data-[state=on]:bg-candle/12 data-[state=on]:text-candle"
+							>
+								{DAY_NAMES[day][0]}
+							</ToggleGroup.Item>
+						{/each}
+					</ToggleGroup.Root>
+				{/if}
+				<NumberStepper
+					bind:value={draft.interval}
+					min={1}
+					max={MAX_INTERVAL}
+					before="Every"
+					noun={UNITS[draft.choice]}
+				/>
 			</div>
 		{/if}
+	</fieldset>
 
-		<fieldset class="flex flex-col gap-3">
-			<legend class="mb-2 text-sm font-medium">Repeat</legend>
+	{#if draft.choice !== 'none'}
+		<fieldset class="flex flex-col gap-3" transition:slide={{ duration: 150 }}>
+			<legend class="mb-2 text-sm font-medium">Ends</legend>
 			<ToggleGroup.Root
 				type="single"
 				variant="outline"
 				spacing={2}
 				class="w-full flex-wrap"
-				bind:value={() => draft.choice, setChoice}
-				aria-label="Repeat"
+				bind:value={() => draft.ends, setEnds}
+				aria-label="Ends"
 			>
-				{#each CHOICES as option (option.value)}
+				{#each ENDS as option (option.value)}
 					<ToggleGroup.Item
 						value={option.value}
 						class="h-10 rounded-full px-4 text-muted-foreground data-[state=on]:border-candle/60 data-[state=on]:bg-candle/12 data-[state=on]:text-candle"
@@ -300,134 +338,198 @@
 					</ToggleGroup.Item>
 				{/each}
 			</ToggleGroup.Root>
-
-			{#if draft.choice === 'days'}
+			{#if draft.ends === 'until'}
 				<div transition:slide={{ duration: 150 }}>
-					<NumberStepper
-						bind:value={draft.days}
-						min={2}
-						max={MAX_INTERVAL}
-						before="Every"
-						noun="days"
+					<DateField
+						bind:value={draft.until}
+						min={draft.startDate}
+						{weekStart}
+						invalid={draft.until < draft.startDate}
 					/>
 				</div>
-			{:else if draft.choice === 'weekly' || draft.choice === 'monthly' || draft.choice === 'yearly'}
-				<div class="flex flex-col gap-3" transition:slide={{ duration: 150 }}>
-					{#if draft.choice === 'weekly'}
-						<ToggleGroup.Root
-							type="multiple"
-							variant="outline"
-							spacing={1}
-							class="w-full justify-between sm:justify-start"
-							bind:value={() => weekdays, (days: string[]) => (draft.weekdays = days as Weekday[])}
-							aria-label="Days of the week"
-						>
-							{#each orderedWeekdays as day (day)}
-								<ToggleGroup.Item
-									value={day}
-									aria-label={DAY_NAMES[day]}
-									class="size-10 rounded-full p-0 text-muted-foreground data-[state=on]:border-candle/60 data-[state=on]:bg-candle/12 data-[state=on]:text-candle"
-								>
-									{DAY_NAMES[day][0]}
-								</ToggleGroup.Item>
-							{/each}
-						</ToggleGroup.Root>
-					{/if}
+			{:else if draft.ends === 'count'}
+				<div transition:slide={{ duration: 150 }}>
 					<NumberStepper
-						bind:value={draft.interval}
+						bind:value={draft.count}
 						min={1}
-						max={MAX_INTERVAL}
-						before="Every"
-						noun={UNITS[draft.choice]}
+						max={MAX_COUNT}
+						before="After"
+						noun="times"
 					/>
 				</div>
 			{/if}
 		</fieldset>
+	{/if}
 
-		{#if draft.choice !== 'none'}
-			<fieldset class="flex flex-col gap-3" transition:slide={{ duration: 150 }}>
-				<legend class="mb-2 text-sm font-medium">Ends</legend>
-				<ToggleGroup.Root
-					type="single"
-					variant="outline"
-					spacing={2}
-					class="w-full flex-wrap"
-					bind:value={() => draft.ends, setEnds}
-					aria-label="Ends"
-				>
-					{#each ENDS as option (option.value)}
-						<ToggleGroup.Item
-							value={option.value}
-							class="h-10 rounded-full px-4 text-muted-foreground data-[state=on]:border-candle/60 data-[state=on]:bg-candle/12 data-[state=on]:text-candle"
-						>
-							{option.label}
-						</ToggleGroup.Item>
+	<!-- What it comes to, live. -->
+	<div class="rounded-lg border bg-card px-4 py-3" aria-live="polite">
+		{#if preview}
+			<p class="font-display text-lg leading-snug text-candle">{preview.summary}</p>
+			{#if draft.choice === 'none'}
+				<p class="mt-1 text-sm text-muted-foreground">
+					{schedule.startDate === today.current
+						? 'Today only.'
+						: schedule.startDate > today.current
+							? `Just ${dayName(schedule.startDate, today.current, weekStart, true)}.`
+							: 'A day gone by: it shows on that day, to mark it prayed.'}
+				</p>
+			{:else if preview.dates.length}
+				<p class="mt-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
+					{preview.dates[0] === schedule.startDate && schedule.startDate >= today.current
+						? 'Starting'
+						: 'Coming up'}
+				</p>
+				<ul class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
+					{#each preview.dates as date (date)}
+						<li class="whitespace-nowrap">
+							{date === today.current || date === addDays(today.current, 1)
+								? relativeDay(date, today.current)
+								: dateLabel(date, today.current)}
+						</li>
 					{/each}
-				</ToggleGroup.Root>
-				{#if draft.ends === 'until'}
-					<div transition:slide={{ duration: 150 }}>
-						<DateField
-							bind:value={draft.until}
-							min={draft.startDate}
-							{weekStart}
-							invalid={draft.until < draft.startDate}
-						/>
-					</div>
-				{:else if draft.ends === 'count'}
-					<div transition:slide={{ duration: 150 }}>
-						<NumberStepper
-							bind:value={draft.count}
-							min={1}
-							max={MAX_COUNT}
-							before="After"
-							noun="times"
-						/>
-					</div>
-				{/if}
-			</fieldset>
-		{/if}
-
-		<!-- What it comes to, live. -->
-		<div class="rounded-lg border bg-card px-4 py-3" aria-live="polite">
-			{#if preview}
-				<p class="font-display text-lg leading-snug text-candle">{preview.summary}</p>
-				{#if draft.choice === 'none'}
-					<p class="mt-1 text-sm text-muted-foreground">
-						{schedule.startDate === today.current
-							? 'Today only.'
-							: schedule.startDate > today.current
-								? `Just ${dayName(schedule.startDate, today.current, weekStart, true)}.`
-								: 'A day gone by: it shows on that day, to mark it prayed.'}
-					</p>
-				{:else if preview.dates.length}
-					<p class="mt-2 text-xs font-medium tracking-wide text-muted-foreground uppercase">
-						{preview.dates[0] === schedule.startDate && schedule.startDate >= today.current
-							? 'Starting'
-							: 'Coming up'}
-					</p>
-					<ul class="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-sm">
-						{#each preview.dates as date (date)}
-							<li class="whitespace-nowrap">
-								{date === today.current || date === addDays(today.current, 1)
-									? relativeDay(date, today.current)
-									: dateLabel(date, today.current)}
-							</li>
-						{/each}
-					</ul>
-				{:else}
-					<p class="mt-1 text-sm text-muted-foreground">No more days after today.</p>
-				{/if}
+				</ul>
 			{:else}
-				<p class="text-sm text-tomato">{problem}</p>
+				<p class="mt-1 text-sm text-muted-foreground">No more days after today.</p>
 			{/if}
-		</div>
-	</form>
+		{:else}
+			<p class="text-sm text-tomato">{problem}</p>
+		{/if}
+	</div>
+{/snippet}
 
-	{#snippet footer()}
-		<Button variant="outline" class="h-11" onclick={() => (open = false)}>Cancel</Button>
-		<Button type="submit" form={formId} class="h-11" disabled={saving}>
+{#if inline}
+	{#snippet inlineActions(phone: boolean)}
+		<Button
+			type="button"
+			variant={phone ? 'outline' : 'ghost'}
+			class={phone ? 'h-11 flex-1' : 'h-10 px-3'}
+			disabled={saving}
+			onclick={() => (open = false)}
+		>
+			Cancel
+		</Button>
+		<Button type="submit" class={phone ? 'h-11 flex-1' : 'h-10 px-4'} disabled={saving}>
 			{#if saving}<Spinner />{/if}
-			{target.kind === 'edit' ? 'Save' : 'Add request'}
+			Save
 		</Button>
 	{/snippet}
-</AdaptiveSheet>
+
+	<form id={formId} onsubmit={save} novalidate>
+		<!-- Where the page's header is, with "Editing" where Back was, so the title stays put. -->
+		<header
+			class="page-column flex items-start justify-between gap-3 pt-[calc(1.5rem+env(safe-area-inset-top))] pb-4 md:pt-[calc(2.5rem+env(safe-area-inset-top))]"
+		>
+			<div class="min-w-0 flex-1">
+				<p class="mb-1 flex min-h-8 items-center text-sm text-muted-foreground">Editing</p>
+				<textarea
+					bind:value={draft.title}
+					rows={1}
+					maxlength={200}
+					placeholder="Who or what to pray for"
+					aria-label="Title"
+					aria-invalid={draft.tried && !!titleProblem}
+					aria-describedby={draft.tried && titleProblem ? `${formId}-title-error` : undefined}
+					class={[field, 'font-display text-3xl tracking-tight md:text-4xl']}
+					onkeydown={(event) => {
+						// Not while an input method is composing: its Enter picks the characters.
+						if (event.key !== 'Enter' || event.isComposing) return;
+						event.preventDefault();
+						event.currentTarget.form?.requestSubmit();
+					}}></textarea>
+				{#if draft.tried && titleProblem}
+					<p id="{formId}-title-error" class="mt-1 text-sm text-tomato">{titleProblem}</p>
+				{/if}
+			</div>
+			<div class="hidden shrink-0 items-center gap-2 pt-9 md:flex">
+				{@render inlineActions(false)}
+			</div>
+		</header>
+
+		<div class="page-column flex flex-col gap-8 pb-10 [view-transition-name:request-body]">
+			<section class="flex flex-col gap-2">
+				<h2 class="font-sans text-xs font-medium tracking-wide text-muted-foreground uppercase">
+					<label for="{formId}-notes">Notes</label>
+				</h2>
+				<textarea
+					id="{formId}-notes"
+					bind:value={draft.notes}
+					{@attach (node) => {
+						if (focus === 'notes') node.focus();
+					}}
+					placeholder="Details, names, a verse…"
+					rows={2}
+					maxlength={5000}
+					class={[field, '-mt-1 min-h-9 py-1 leading-relaxed']}></textarea>
+			</section>
+			<section class="flex flex-col gap-6" aria-labelledby="{formId}-schedule">
+				<h2
+					id="{formId}-schedule"
+					class="-mb-2 font-sans text-xs font-medium tracking-wide text-muted-foreground uppercase"
+				>
+					Schedule
+				</h2>
+				{@render scheduleFields()}
+			</section>
+		</div>
+
+		<div
+			class="sticky bottom-[calc(4.5rem+env(safe-area-inset-bottom))] z-10 page-column flex gap-2 border-t bg-background/95 py-3 backdrop-blur md:hidden"
+		>
+			{@render inlineActions(true)}
+		</div>
+	</form>
+{:else}
+	<AdaptiveSheet
+		bind:open
+		title={target.kind === 'edit' ? 'Edit request' : 'New request'}
+		description={target.kind === 'add'
+			? `Something to pray for${fromDay ? ` ${dayName(fromDay, today.current, weekStart, true)}` : ''}, once or on a schedule.`
+			: undefined}
+	>
+		<form id={formId} class="flex flex-col gap-6 pt-1 pb-2" onsubmit={save} novalidate>
+			<div class="flex flex-col gap-2">
+				<Label for="{formId}-title">Title</Label>
+				<Input
+					id="{formId}-title"
+					bind:value={draft.title}
+					placeholder="Who or what to pray for"
+					autocomplete="off"
+					enterkeyhint="done"
+					maxlength={200}
+					class="h-11"
+					aria-invalid={draft.tried && !!titleProblem}
+					aria-describedby={draft.tried && titleProblem ? `${formId}-title-error` : undefined}
+				/>
+				{#if draft.tried && titleProblem}
+					<p id="{formId}-title-error" class="text-sm text-tomato">{titleProblem}</p>
+				{/if}
+			</div>
+
+			<div class="flex flex-col gap-2">
+				<Label for="{formId}-notes">
+					Notes <span class="font-normal text-muted-foreground">(optional)</span>
+				</Label>
+				<Textarea
+					id="{formId}-notes"
+					bind:value={draft.notes}
+					placeholder="Details, names, a verse…"
+					rows={3}
+					maxlength={5000}
+					class="max-h-48"
+				/>
+			</div>
+
+			{@render scheduleFields()}
+		</form>
+
+		{#snippet footer()}
+			<Button variant="outline" class="h-11" disabled={saving} onclick={() => (open = false)}>
+				Cancel
+			</Button>
+			<Button type="submit" form={formId} class="h-11" disabled={saving}>
+				{#if saving}<Spinner />{/if}
+				{target.kind === 'edit' ? 'Save' : 'Add request'}
+			</Button>
+		{/snippet}
+	</AdaptiveSheet>
+{/if}

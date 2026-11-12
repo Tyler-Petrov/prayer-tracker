@@ -1,16 +1,20 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import Check from '@lucide/svelte/icons/check';
+	import { useConvexClient } from 'convex-svelte';
 	import CalendarX2 from '@lucide/svelte/icons/calendar-x-2';
 	import ExternalLink from '@lucide/svelte/icons/square-arrow-out-up-right';
 	import Pencil from '@lucide/svelte/icons/pencil';
 	import Repeat from '@lucide/svelte/icons/repeat';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
+	import { api } from '#convex/_generated/api.js';
 	import type { DayItem } from '#convex/days.js';
 	import CheckMark from '#lib/components/check-mark.svelte';
+	import PrayingHands from '#lib/components/praying-hands.svelte';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
+	import { prefetchQuery } from '#lib/convex-query.svelte.js';
 	import { dayName } from '#lib/dates.js';
 	import type { RequestActions } from '#lib/request-actions.js';
+	import { requestArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { shortDate, type WeekStart } from '#convex/shared/recurrence.js';
 
@@ -21,7 +25,6 @@
 		href,
 		actions,
 		weekStart,
-		onopen,
 		onedit
 	}: {
 		item: DayItem;
@@ -29,13 +32,11 @@
 		date: string;
 		/** Its schedule in words ("Every 9 days"), from the Requests list. */
 		summary: string | undefined;
-		/** Its page. */
+		/** Its page, for this day. */
 		href: string;
 		actions: RequestActions;
 		/** The person's first day of the week, which decides "next" and "last" (as the Days headings do). */
 		weekStart: WeekStart;
-		/** Tapped: its quick sheet. */
-		onopen: () => void;
 		onedit: () => void;
 	} = $props();
 
@@ -55,6 +56,12 @@
 		);
 	}
 
+	// What its page awaits, started as the row is hovered or pressed, so it's ready by the time the page is
+	// (SvelteKit preloads the page's code from the link the same way).
+	const client = useConvexClient();
+	const prefetch = () =>
+		prefetchQuery(client, api.requests.get, requestArgs(item.requestId, today.current));
+
 	// A long press that opens the menu ends in a tap on whatever it pressed: swallow it, or the row's
 	// check or sheet would act too.
 	let pressOpened = false;
@@ -63,7 +70,7 @@
 <ContextMenu.Root onOpenChange={(open) => open && (pressOpened = true)}>
 	<ContextMenu.Trigger
 		class={[
-			'flex items-stretch transition-colors [-webkit-touch-callout:none]',
+			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40',
 			item.prayed && 'bg-sage/5'
 		]}
 		onpointerdowncapture={() => (pressOpened = false)}
@@ -91,10 +98,11 @@
 				<CheckMark checked={item.prayed} />
 			</button>
 		{/if}
-		<button
-			type="button"
-			class="flex min-h-16 min-w-0 flex-1 flex-col justify-center py-3 pr-4 text-left transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
-			onclick={onopen}
+		<a
+			{href}
+			class="flex min-h-16 min-w-0 flex-1 flex-col justify-center py-3 pr-4 text-left focus-visible:outline-none"
+			onpointerenter={prefetch}
+			onpointerdown={prefetch}
 		>
 			<span
 				class={[
@@ -128,7 +136,7 @@
 					</span>
 				{/if}
 			</span>
-		</button>
+		</a>
 	</ContextMenu.Trigger>
 	<!-- Below the press, not beside it: beside, a press past the middle of a phone flips the menu left, and
 	     nothing shifts it back across (floating-ui shifts along the side only), so it hung off the left edge. -->
@@ -139,7 +147,7 @@
 					<Undo2 />
 					Not prayed yet
 				{:else}
-					<Check />
+					<PrayingHands />
 					Mark prayed
 				{/if}
 			</ContextMenu.Item>

@@ -5,7 +5,6 @@
 	import { resolve } from '$app/paths';
 	import { navigating, page } from '$app/state';
 	import { parseDate } from '@internationalized/date';
-	import { toast } from 'svelte-sonner';
 	import CalendarSearch from '@lucide/svelte/icons/calendar-search';
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -17,7 +16,6 @@
 	import { addDays, daysBetween, isDate, MAX_RANGE_DAYS } from '#convex/shared/recurrence.js';
 	import { weekStart } from '#convex/shared/weeks.js';
 	import DayItem from '#lib/components/days/day-item.svelte';
-	import ItemSheet from '#lib/components/days/item-sheet.svelte';
 	import RequestEditor, { type EditorTarget } from '#lib/components/requests/request-editor.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Calendar } from '#lib/components/ui/calendar/index.js';
@@ -314,22 +312,6 @@
 		range = { from, to };
 	}
 
-	// The request sheet for a day's item, following the live item; the last copy stays while it closes.
-	let sheetOpen = $state(false);
-	let picked = $state.raw<{ item: Item; date: string }>();
-	const live = $derived(
-		picked && byDay.get(picked.date)?.items.find((i) => i.requestId === picked?.item.requestId)
-	);
-	// It left that day somewhere else (answered, deleted, rescheduled): close rather than offer actions that fail.
-	$effect(() => {
-		if (!sheetOpen || !picked || live || !shown) return;
-		if (picked.date < shown.range.from || picked.date > shown.range.to) return;
-		sheetOpen = false;
-		toast(
-			`${picked.item.title} is no longer on ${dayName(picked.date, today.current, me.weekStart, true)}`
-		);
-	});
-
 	let editorOpen = $state(false);
 	let editorTarget = $state.raw<EditorTarget>({ kind: 'add', day: today.current });
 
@@ -341,19 +323,21 @@
 		const row = rows.get(requestId);
 		if (!row) return;
 		editorTarget = { kind: 'edit', request: row };
-		sheetOpen = false;
 		editorOpen = true;
 	}
-	function open(item: Item, date: string) {
-		picked = { item, date };
-		sheetOpen = true;
-	}
 
-	const requestHref = (requestId: Id<'requests'>) =>
-		resolve('/requests/[requestId]', { requestId });
+	// A request opens its page, tied to the day it was tapped on: that day's prayed and skip are there.
+	const requestHref = (requestId: Id<'requests'>, day: string) =>
+		`${resolve('/requests/[requestId]', { requestId })}?day=${day}`;
 
 	let pickerOpen = $state(false);
 	const month = $derived(formatDay(topDay ?? start, 'monthYear'));
+
+	// The list never ends, so a scrollbar says nothing: hidden while this tab is open (layout.css).
+	$effect(() => {
+		document.documentElement.classList.add('hide-scrollbar');
+		return () => document.documentElement.classList.remove('hide-scrollbar');
+	});
 </script>
 
 <svelte:window {onscroll} />
@@ -515,10 +499,9 @@
 										{item}
 										date={day}
 										summary={rows.get(item.requestId)?.summary}
-										href={requestHref(item.requestId)}
+										href={requestHref(item.requestId, day)}
 										{actions}
 										weekStart={me.weekStart}
-										onopen={() => open(item, day)}
 										onedit={() => edit(item.requestId)}
 									/>
 								</li>
@@ -542,19 +525,5 @@
 		</div>
 	{/if}
 </div>
-
-{#if picked}
-	<ItemSheet
-		bind:open={sheetOpen}
-		item={live ?? picked.item}
-		date={picked.date}
-		summary={rows.get(picked.item.requestId)?.summary}
-		notes={rows.get(picked.item.requestId)?.notes}
-		href={requestHref(picked.item.requestId)}
-		{actions}
-		weekStart={me.weekStart}
-		onedit={() => picked && edit(picked.item.requestId)}
-	/>
-{/if}
 
 <RequestEditor bind:open={editorOpen} target={editorTarget} weekStart={me.weekStart} />
