@@ -4,6 +4,7 @@
 	import { page } from '$app/state';
 	import { slide } from 'svelte/transition';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
+	import CalendarX2 from '@lucide/svelte/icons/calendar-x-2';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import HandHeart from '@lucide/svelte/icons/hand-heart';
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -12,6 +13,7 @@
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { api } from '#convex/_generated/api.js';
 	import type { Id } from '#convex/_generated/dataModel.js';
+	import { isDate, occursOn } from '#convex/shared/recurrence.js';
 	import AdaptiveSheet from '#lib/components/adaptive-sheet.svelte';
 	import CheckMark from '#lib/components/check-mark.svelte';
 	import DateField from '#lib/components/date-field.svelte';
@@ -25,12 +27,17 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import { convexQuery } from '#lib/convex-query.svelte.js';
-	import { dateLabel, dayName, formatDay } from '#lib/dates.js';
+	import { dateLabel, dayName, formatDay, isDay } from '#lib/dates.js';
 	import { requestActions } from '#lib/request-actions.js';
 	import { requestArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 
 	const requestId = $derived(page.params.requestId as Id<'requests'>);
+	// `?day=` comes from tapping it on the Days tab: the page is that day's, with its prayed mark and skip.
+	const dayParam = $derived.by(() => {
+		const day = page.url.searchParams.get('day');
+		return isDay(day) && isDate(day) ? day : undefined;
+	});
 	// The request (with its upcoming and prayed days) and the person's week start, awaited together and live.
 	const [request, me] = $derived(
 		await Promise.all([
@@ -40,21 +47,41 @@
 	);
 	const actions = requestActions();
 
-	// Back goes where it came from: the Days tab, or the list (also when opened directly).
+	// Back goes where it came from: the Days tab (always, for a day's page), or the list (also when opened
+	// directly).
 	let fromDays = $state(false);
 	afterNavigate(({ from, type }) => {
 		if (type === 'enter') fromDays = false;
 		else if (from?.route.id) fromDays = from.route.id === '/';
 	});
 	const back = $derived(
-		fromDays
+		fromDays || dayParam
 			? { href: resolve('/'), label: 'Days' }
 			: { href: resolve('/requests'), label: 'Requests' }
 	);
 
 	const target = $derived(request && { requestId, title: request.title });
-	const prayedToday = $derived(!!request?.prayedDates.includes(today.current));
-	const dueToday = $derived(request?.nextDate === today.current);
+	/**
+	 * The day the page is about: the one tapped on the Days tab, else today. Shown when it's on the Days tab
+	 * that day (scheduled, skipped or not, or marked prayed), except today skipped without asking for it (the
+	 * Skipped list brings it back).
+	 */
+	const day = $derived.by(() => {
+		if (!request) return undefined;
+		const date = dayParam ?? today.current;
+		const occurring = {
+			startDate: request.startDate,
+			rrule: request.rrule ?? undefined,
+			skipDates: request.skipDates,
+			answeredOn: request.answeredOn ?? undefined
+		};
+		const scheduled = occursOn(occurring, date, { includeSkipped: true });
+		const skipped = scheduled && request.skipDates.includes(date);
+		const prayed = request.prayedDates.includes(date);
+		if (!scheduled && !prayed) return undefined;
+		if (skipped && !dayParam) return undefined;
+		return { date, scheduled, skipped, prayed };
+	});
 	const skippedAhead = $derived(request?.skipDates.filter((d) => d >= today.current) ?? []);
 
 	const HISTORY_SHOWN = 24;
@@ -143,8 +170,11 @@
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-auto min-w-44">
-				{#if r.nextDate}
-					<DropdownMenu.Item class="min-h-10" onSelect={() => goto(dayHref(r.nextDate!))}>
+				{#if dayParam ?? r.nextDate}
+					<DropdownMenu.Item
+						class="min-h-10"
+						onSelect={() => goto(dayHref((dayParam ?? r.nextDate)!))}
+					>
 						<CalendarDays />
 						Show on Days
 					</DropdownMenu.Item>
@@ -192,22 +222,60 @@
 				</section>
 			{/if}
 
-			{#if dueToday || prayedToday}
-				<!-- Today's check, right here. -->
-				<button
-					type="button"
-					aria-pressed={prayedToday}
+			{#if day}
+				{@const on = dayName(day.date, today.current, me.weekStart, true)}
+				<!-- The day's check and skip, right here. -->
+				<section
+					aria-labelledby="day-heading"
 					class={[
-						'group flex min-h-14 items-center gap-3 rounded-xl border bg-card px-4 text-left transition-colors hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none',
-						prayedToday ? 'border-sage/25 bg-sage/5' : 'border-candle/25'
+						'divide-y overflow-hidden rounded-xl border bg-card',
+						day.prayed ? 'border-sage/25' : !day.skipped && 'border-candle/25'
 					]}
-					onclick={() => target && actions.prayed(target, today.current, !prayedToday)}
 				>
-					<CheckMark checked={prayedToday} />
-					<span class="flex-1">
-						{prayedToday ? 'Prayed today' : 'Pray for this today'}
-					</span>
-				</button>
+					<h2 id="day-heading" class="sr-only">
+						{dayName(day.date, today.current, me.weekStart)}, {formatDay(day.date, 'month')}
+					</h2>
+					{#if day.skipped}
+						<div class="flex min-h-14 items-center gap-3 px-4">
+							<span
+								class="size-6 shrink-0 rounded-full border-2 border-dashed border-muted-foreground/40"
+								aria-hidden="true"
+							></span>
+							<span class="flex-1 text-muted-foreground">Skipped {on}</span>
+						</div>
+						<button
+							type="button"
+							class="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-candle transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
+							onclick={() => target && actions.skip(target, day.date, false, on)}
+						>
+							<Undo2 class="size-4" aria-hidden="true" />
+							Bring back {on}
+						</button>
+					{:else}
+						<button
+							type="button"
+							aria-pressed={day.prayed}
+							class={[
+								'flex min-h-14 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none',
+								day.prayed && 'bg-sage/5'
+							]}
+							onclick={() => target && actions.prayed(target, day.date, !day.prayed)}
+						>
+							<CheckMark checked={day.prayed} />
+							<span class="flex-1">{day.prayed ? `Prayed ${on}` : `Pray for this ${on}`}</span>
+						</button>
+						{#if r.recurring && day.scheduled}
+							<button
+								type="button"
+								class="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:outline-none"
+								onclick={() => target && actions.skip(target, day.date, true, on)}
+							>
+								<CalendarX2 class="size-4" aria-hidden="true" />
+								Skip just {on}
+							</button>
+						{/if}
+					{/if}
+				</section>
 			{/if}
 
 			{#if r.notes}

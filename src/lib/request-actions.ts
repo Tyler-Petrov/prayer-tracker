@@ -1,5 +1,5 @@
-// The quick request actions (prayed, skip a day, answer, delete) for the Days tab, the item sheet and a
-// request's page: each one optimistic across every loaded query (optimistic.ts), with errors shown as toasts.
+// The quick request actions (prayed, skip a day, answer, delete) for the Days tab and a request's page:
+// each one optimistic across every loaded query (optimistic.ts), with errors shown as toasts.
 // Call `requestActions()` while a component initializes (it uses the Convex client from context).
 import { toast } from 'svelte-sonner';
 import { useMutation } from 'convex-svelte';
