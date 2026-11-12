@@ -1,0 +1,4 @@
+onlyBuiltDependencies:
+  - esbuild
+patchedDependencies:
+  svelte@5.57.1: patches/svelte@5.57.1.patch

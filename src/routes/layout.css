@@ -1,0 +1,177 @@
+@import 'tailwindcss';
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+@import '@fontsource/young-serif';
+@import '@fontsource-variable/atkinson-hyperlegible-next';
+@import '@fontsource-variable/spline-sans-mono';
+
+@custom-variant dark (&:is(.dark *));
+@plugin '@tailwindcss/typography';
+
+/*
+ * Vespers: evening & candlelight. The app is dark-only, so one palette serves both :root and .dark.
+ * Meal Tracker's layout, type and components, in an evening palette with one warm light.
+ * night     #121016  page (a violet-tinted near-black)
+ * pew       #1B1820  cards
+ * vellum    #EEEAF2  text
+ * dusk      #A29BAB  secondary text (6.6:1 on cards)
+ * candle    #F0C36D  primary accent: today, active tab, links, focus (the one warm light)
+ * sage      #9DB87F  prayed / done
+ * lavender  #B9A7EE  answered
+ * tomato    #E0644A  destructive
+ */
+:root,
+.dark {
+	--background: #121016;
+	--foreground: #eeeaf2;
+	--card: #1b1820;
+	--card-foreground: #eeeaf2;
+	--popover: #211d27;
+	--popover-foreground: #eeeaf2;
+	--primary: #f0c36d;
+	--primary-foreground: #1c1508;
+	--secondary: #28232f;
+	--secondary-foreground: #eeeaf2;
+	--muted: #28232f;
+	--muted-foreground: #a29bab;
+	--accent: #2a2531;
+	--accent-foreground: #eeeaf2;
+	--destructive: #e0644a;
+	--border: rgb(238 234 242 / 9%);
+	--input: rgb(238 234 242 / 14%);
+	--ring: rgb(240 195 109 / 60%);
+	--candle: #f0c36d;
+	--sage: #9db87f;
+	--lavender: #b9a7ee;
+	--tomato: #e0644a;
+	--chart-1: #f0c36d;
+	--chart-2: #9db87f;
+	--chart-3: #e0644a;
+	--chart-4: #7fa6b8;
+	--chart-5: #b9a7ee;
+	--radius: 0.75rem;
+	--sidebar: #16131b;
+	--sidebar-foreground: #eeeaf2;
+	--sidebar-primary: #f0c36d;
+	--sidebar-primary-foreground: #1c1508;
+	--sidebar-accent: #2a2531;
+	--sidebar-accent-foreground: #eeeaf2;
+	--sidebar-border: rgb(238 234 242 / 9%);
+	--sidebar-ring: rgb(240 195 109 / 60%);
+}
+
+@theme inline {
+	--font-sans: 'Atkinson Hyperlegible Next Variable', ui-sans-serif, system-ui, sans-serif;
+	--font-display: 'Young Serif', ui-serif, Georgia, serif;
+	--font-mono: 'Spline Sans Mono Variable', ui-monospace, monospace;
+	--color-candle: var(--candle);
+	--color-sage: var(--sage);
+	--color-lavender: var(--lavender);
+	--color-tomato: var(--tomato);
+	--color-sidebar-ring: var(--sidebar-ring);
+	--color-sidebar-border: var(--sidebar-border);
+	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+	--color-sidebar-accent: var(--sidebar-accent);
+	--color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+	--color-sidebar-primary: var(--sidebar-primary);
+	--color-sidebar-foreground: var(--sidebar-foreground);
+	--color-sidebar: var(--sidebar);
+	--color-chart-5: var(--chart-5);
+	--color-chart-4: var(--chart-4);
+	--color-chart-3: var(--chart-3);
+	--color-chart-2: var(--chart-2);
+	--color-chart-1: var(--chart-1);
+	--color-ring: var(--ring);
+	--color-input: var(--input);
+	--color-border: var(--border);
+	--color-destructive: var(--destructive);
+	--color-accent-foreground: var(--accent-foreground);
+	--color-accent: var(--accent);
+	--color-muted-foreground: var(--muted-foreground);
+	--color-muted: var(--muted);
+	--color-secondary-foreground: var(--secondary-foreground);
+	--color-secondary: var(--secondary);
+	--color-primary-foreground: var(--primary-foreground);
+	--color-primary: var(--primary);
+	--color-popover-foreground: var(--popover-foreground);
+	--color-popover: var(--popover);
+	--color-card-foreground: var(--card-foreground);
+	--color-card: var(--card);
+	--color-foreground: var(--foreground);
+	--color-background: var(--background);
+	--radius-sm: calc(var(--radius) * 0.6);
+	--radius-md: calc(var(--radius) * 0.8);
+	--radius-lg: var(--radius);
+	--radius-xl: calc(var(--radius) * 1.4);
+	--radius-2xl: calc(var(--radius) * 1.8);
+	--radius-3xl: calc(var(--radius) * 2.2);
+	--radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/*
+ * The content column of every page: a reading width, centered in the space beside the
+ * rail, with the page gutter inside. Headers, content and sticky bars all use it so they line up.
+ */
+@utility page-column {
+	@apply mx-auto w-full max-w-[calc(var(--container-3xl)+4rem)] px-4 md:px-8;
+}
+
+@layer base {
+	* {
+		@apply border-border outline-ring/50;
+	}
+	/* Tabs both shorter and taller than the window: keep the scrollbar's room so nothing jumps sideways. */
+	html {
+		scrollbar-gutter: stable;
+	}
+	body {
+		@apply bg-background text-foreground;
+	}
+	/* Tailwind 4 leaves buttons on the default arrow; anything clickable shows the hand. */
+	button:not(:disabled),
+	[role='button']:not([aria-disabled='true']),
+	[role='checkbox'],
+	[role='radio'],
+	[role='switch'],
+	[role='menuitem'],
+	[role='option'],
+	[role='tab'],
+	label[for],
+	select,
+	summary {
+		cursor: pointer;
+	}
+	html {
+		@apply font-sans antialiased;
+		-webkit-tap-highlight-color: transparent;
+	}
+	h1,
+	h2 {
+		@apply font-display tracking-tight;
+	}
+}
+
+/* Counts and dates in lists (prayed 12 times, Nov 12): tabular figures, so columns of them line up. */
+@utility tabular {
+	font-family: var(--font-mono);
+	font-variant-numeric: tabular-nums;
+}
+
+/* A day row scrolled to (Today, a date picked): a candlelight wash that fades out (Meal Tracker's plan). */
+.landed {
+	border-radius: var(--radius-md);
+	animation: landed 700ms ease-out;
+}
+@keyframes landed {
+	from {
+		background: color-mix(in oklab, var(--candle) 18%, transparent);
+		box-shadow: 0 0 0 0.5rem color-mix(in oklab, var(--candle) 18%, transparent);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.landed {
+		animation: none;
+		background: color-mix(in oklab, var(--candle) 12%, transparent);
+		box-shadow: 0 0 0 0.5rem color-mix(in oklab, var(--candle) 12%, transparent);
+	}
+}

@@ -1,0 +1,158 @@
+name: Deploy production
+
+run-name: Staged production deploy (build → Convex → promote)
+
+# Convex validation and the web build run concurrently. The Worker is uploaded
+# to Cloudflare as a new version without routing traffic to it, so the live
+# site stays unchanged until the backend deploy succeeds.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm_production:
+        description: Confirm production deploy (unchecked runs are rejected)
+        required: true
+        type: boolean
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  validate_backend:
+    name: Validate Convex deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # A required boolean input still accepts false, so reject unconfirmed
+      # dispatches with a visible failure instead of silently skipping.
+      - name: Require confirmation
+        if: ${{ !inputs.confirm_production }}
+        run: |
+          echo "::error::Production deploy was not confirmed. Re-run this workflow with 'Confirm production deploy' checked."
+          exit 1
+
+      - name: Check out release commit
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Validate Convex production deployment
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: pnpm exec convex deploy --dry-run --yes
+
+  stage_web:
+    name: Build and stage web app
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version_id: ${{ steps.stage.outputs.version_id }}
+
+    steps:
+      - name: Require confirmation
+        if: ${{ !inputs.confirm_production }}
+        run: exit 1
+
+      - name: Check out release commit
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # Uploads a new Worker version without deploying it to any traffic.
+      - name: Upload staged version to Cloudflare
+        id: stage
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -euo pipefail
+
+          output="$(pnpm exec wrangler versions upload \
+            --message "$GITHUB_SHA" \
+            --tag "${GITHUB_SHA:0:7}")"
+          echo "$output"
+
+          version_id="$(grep --only-matching --perl-regexp 'Worker Version ID: \K[0-9a-f-]{36}' <<<"$output" || true)"
+
+          if [[ -z "$version_id" ]]; then
+            echo "::error::Wrangler did not return a staged Worker version ID."
+            exit 1
+          fi
+
+          echo "version_id=$version_id" >> "$GITHUB_OUTPUT"
+
+  release:
+    name: Deploy backend and promote web app
+    needs:
+      - validate_backend
+      - stage_web
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      VERSION_ID: ${{ needs.stage_web.outputs.version_id }}
+
+    steps:
+      - name: Check out release commit
+        uses: actions/checkout@v7
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10.34.5
+
+      - name: Use Node.js 22
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The build and the Convex dry run both succeeded. If the backend deploy
+      # fails, the staged Worker version is never promoted.
+      - name: Deploy Convex functions to production
+        env:
+          CONVEX_DEPLOY_KEY: ${{ secrets.CONVEX_DEPLOY_KEY }}
+        run: pnpm exec convex deploy --yes
+
+      - name: Promote web app
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          pnpm exec wrangler versions deploy "$VERSION_ID@100%" \
+            --message "$GITHUB_SHA" \
+            --yes

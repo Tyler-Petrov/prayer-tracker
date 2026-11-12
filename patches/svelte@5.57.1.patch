@@ -1,0 +1,27 @@
+diff --git a/src/internal/client/reactivity/batch.js b/src/internal/client/reactivity/batch.js
+index 75ce33b1c56dcf090c289517209baf095724ad89..baa1016c1aebaf650ff450ed5fe3b3c3b2a8ee0c 100644
+--- a/src/internal/client/reactivity/batch.js
++++ b/src/internal/client/reactivity/batch.js
+@@ -798,6 +798,22 @@ export class Batch {
+ 					mark_effects(source, others, marked, checked);
+ 				}
+ 
++				// An async derived that also ran in this (later) batch did so without the earlier batch's
++				// changes, and may have stopped depending on them. Re-run it in the earlier batch rather than
++				// leaving it to this batch's result, which would otherwise be handed over above. (Forks keep
++				// their own speculative runs.)
++				if (is_earlier && !batch.is_fork) {
++					for (const effect of this.async_deriveds.keys()) {
++						if (
++							batch.async_deriveds.has(effect) &&
++							(effect.f & (DESTROYED | INERT | DIRTY)) === 0
++						) {
++							set_signal_status(effect, DIRTY);
++							schedule_effect(effect);
++						}
++					}
++				}
++
+ 				checked = new Map();
+ 				var current_unequal = [...batch.current]
+ 					.filter(([c, v1]) => {
