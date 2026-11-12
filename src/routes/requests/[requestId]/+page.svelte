@@ -300,16 +300,20 @@
 			target={{ kind: 'edit', request: r }}
 			weekStart={me.weekStart}
 		/>
-	{:else}
-		<!-- Long titles wrap instead of truncating. -->
-		<div class="[&_h1]:text-balance [&_h1]:break-words [&_h1]:whitespace-normal">
-			<PageHeader title={r.title} {back} {description} centerActions>
-				{#snippet actions()}
-					<div class="flex items-center gap-1 md:hidden">{@render toolButtons(true)}</div>
-					<div class="hidden items-center gap-2 md:flex">{@render toolButtons(false)}</div>
-				{/snippet}
-			</PageHeader>
-		</div>
+	{/if}
+	<!-- Long titles wrap instead of truncating. Only hidden while editing: it knows where the page was opened
+	     from, so Back still steps back in history after. -->
+	<div
+		class={['[&_h1]:text-balance [&_h1]:break-words [&_h1]:whitespace-normal', editing && 'hidden']}
+	>
+		<PageHeader title={r.title} {back} {description} centerActions>
+			{#snippet actions()}
+				<div class="flex items-center gap-1 md:hidden">{@render toolButtons(true)}</div>
+				<div class="hidden items-center gap-2 md:flex">{@render toolButtons(false)}</div>
+			{/snippet}
+		</PageHeader>
+	</div>
+	{#if !editing}
 		<!-- The day's prayed and answering, side by side under the header. -->
 		<div class="page-column -mt-1 flex gap-2 pb-6">
 			{@render requestActionButtons()}
@@ -370,6 +374,7 @@
 											<span class="flex-1 text-muted-foreground line-through">
 												{dayName(date, today.current, me.weekStart)}
 											</span>
+											<span class="text-muted-foreground">{dateLabel(date, today.current)}</span>
 											<Button
 												variant="ghost"
 												class="h-9 px-2 text-candle"
