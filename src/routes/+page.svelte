@@ -332,6 +332,12 @@
 
 	let pickerOpen = $state(false);
 	const month = $derived(formatDay(topDay ?? start, 'monthYear'));
+
+	// The list never ends, so a scrollbar says nothing: hidden while this tab is open (layout.css).
+	$effect(() => {
+		document.documentElement.classList.add('hide-scrollbar');
+		return () => document.documentElement.classList.remove('hide-scrollbar');
+	});
 </script>
 
 <svelte:window {onscroll} />

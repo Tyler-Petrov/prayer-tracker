@@ -1,26 +1,29 @@
 <script lang="ts">
+	import { tick } from 'svelte';
 	import { afterNavigate, goto } from '$app/navigation';
 	import { resolve } from '$app/paths';
 	import { page } from '$app/state';
 	import { slide } from 'svelte/transition';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
+	import Check from '@lucide/svelte/icons/check';
 	import CalendarX2 from '@lucide/svelte/icons/calendar-x-2';
+	import ChevronRight from '@lucide/svelte/icons/chevron-right';
 	import Ellipsis from '@lucide/svelte/icons/ellipsis';
 	import HandHeart from '@lucide/svelte/icons/hand-heart';
 	import Pencil from '@lucide/svelte/icons/pencil';
-	import Sparkles from '@lucide/svelte/icons/sparkles';
 	import Trash from '@lucide/svelte/icons/trash';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { api } from '#convex/_generated/api.js';
 	import type { Id } from '#convex/_generated/dataModel.js';
 	import { isDate, occursOn } from '#convex/shared/recurrence.js';
 	import AdaptiveSheet from '#lib/components/adaptive-sheet.svelte';
-	import CheckMark from '#lib/components/check-mark.svelte';
 	import DateField from '#lib/components/date-field.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
+	import PrayingHands from '#lib/components/praying-hands.svelte';
 	import RequestEditor from '#lib/components/requests/request-editor.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
@@ -62,12 +65,13 @@
 
 	const target = $derived(request && { requestId, title: request.title });
 	/**
-	 * The day the page is about: the one tapped on the Days tab, else today. Shown when it's on the Days tab
-	 * that day: scheduled (skipped or not), or marked prayed.
+	 * The day the page is about: the one tapped on the Days tab, else today (a one-time request's own day).
+	 * Shown when it's on the Days tab that day: scheduled (skipped or not), or marked prayed.
 	 */
 	const day = $derived.by(() => {
 		if (!request) return undefined;
-		const date = dayParam ?? today.current;
+		// A one-time request is about its one day, wherever it was opened from.
+		const date = dayParam ?? (request.recurring ? today.current : request.startDate);
 		const occurring = {
 			startDate: request.startDate,
 			rrule: request.rrule ?? undefined,
@@ -80,8 +84,42 @@
 		if (!scheduled && !prayed) return undefined;
 		return { date, scheduled, skipped, prayed };
 	});
-	const skippedAhead = $derived(request?.skipDates.filter((d) => d >= today.current) ?? []);
+	// How the page's day reads, mid-sentence: "today", "next Friday".
+	const on = $derived(day && dayName(day.date, today.current, me.weekStart, true));
+	// Under the title: the page's day and how it stands ("Prayed today", "Next Wednesday"), as Meal Tracker's
+	// recipe page says which meal it's for, then a repeating one's schedule. Without a day: the schedule, and
+	// when a repeating one started (or starts).
+	const description = $derived.by(() => {
+		if (!request) return undefined;
+		if (day && on) {
+			const state = day.skipped
+				? `Skipped ${on}`
+				: day.prayed
+					? `Prayed ${on}`
+					: on[0].toUpperCase() + on.slice(1);
+			// A one-time request's schedule is just that day again.
+			return request.recurring ? `${state} · ${request.summary}` : state;
+		}
+		if (!request.recurring) return request.summary;
+		const start = dateLabel(request.startDate, today.current);
+		return `${request.summary} · ${request.startDate > today.current ? 'starts' : 'since'} ${start}`;
+	});
+	// The days after the one up top: its next few, and the ones skipped ahead (to bring back), in order.
+	const comingUp = $derived(
+		request
+			? [
+					...request.upcoming.map((date) => ({ date, skipped: false })),
+					...request.skipDates
+						.filter((d) => d >= today.current)
+						.map((date) => ({ date, skipped: true }))
+				]
+					.filter(({ date }) => date !== day?.date)
+					.sort((a, b) => a.date.localeCompare(b.date))
+			: []
+	);
 
+	// Prayed days fold away under their count; open, the latest first.
+	let prayedOpen = $state(false);
 	const HISTORY_SHOWN = 24;
 	let historyOpen = $state(false);
 	const history = $derived(
@@ -90,7 +128,23 @@
 			: (request?.prayedDates.slice(0, HISTORY_SHOWN) ?? [])
 	);
 
-	let editorOpen = $state(false);
+	// Editing happens in place, laid out like the page (as Meal Tracker's recipes do). The switch is a view
+	// transition: the title holds still while the rest crossfades and the body rises in (layout.css).
+	let editing = $state(false);
+	/** The editor field to start in (tapping the notes placeholder starts in Notes). */
+	let editFocus = $state<'notes'>();
+	function setEditing(value: boolean, focus?: 'notes') {
+		if (value === editing) return;
+		editFocus = focus;
+		if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) {
+			editing = value;
+			return;
+		}
+		document.startViewTransition(async () => {
+			editing = value;
+			await tick();
+		});
+	}
 
 	// Marking it answered: the day (today, unless it starts later) and a note.
 	let answerOpen = $state(false);
@@ -129,45 +183,93 @@
 
 {#if request}
 	{@const r = request}
-	{#snippet requestActionButtons(phone: boolean)}
+	{#snippet requestActionButtons()}
+		<!-- The page's day comes first, as a planned meal's "Made it" does on Meal Tracker's recipe page, then
+		     answering, in lavender (outlined beside it, the main button without it). -->
+		{#if day && on}
+			{#if day.skipped}
+				<Button
+					variant="secondary"
+					class="h-11 flex-1"
+					onclick={() => target && actions.skip(target, day.date, false, on)}
+				>
+					<Undo2 />
+					Bring back
+				</Button>
+			{:else if day.prayed}
+				<Button
+					variant="secondary"
+					class="h-11 flex-1"
+					onclick={() =>
+						target &&
+						actions.prayed(target, day.date, false, `${r.title} isn't marked prayed ${on}`)}
+				>
+					<Undo2 />
+					Not prayed
+				</Button>
+			{:else}
+				<Button
+					class="h-11 flex-1"
+					onclick={() =>
+						target && actions.prayed(target, day.date, true, `Prayed for ${r.title} ${on}`)}
+				>
+					<PrayingHands />
+					Mark prayed
+				</Button>
+			{/if}
+		{/if}
 		{#if r.answeredOn}
 			<Button
 				variant="secondary"
-				class={phone ? 'h-11 flex-1' : 'h-10 px-3'}
+				class="h-11 flex-1"
 				onclick={() => target && actions.unanswer(target)}
 			>
 				<Undo2 />
 				Not answered
 			</Button>
 		{:else}
-			<Button class={phone ? 'h-11 flex-1' : 'h-10 px-3'} onclick={startAnswer}>
-				<Sparkles />
+			<Button
+				variant={day ? 'outline' : 'default'}
+				class={['h-11 flex-1', day && '[&_svg]:text-lavender']}
+				onclick={startAnswer}
+			>
+				<Check />
 				Mark answered
 			</Button>
 		{/if}
+	{/snippet}
+
+	<!-- Edit and More, at the header's right: icons on phones. -->
+	{#snippet toolButtons(phone: boolean)}
 		<Button
-			variant="outline"
-			class={phone ? 'h-11 px-4' : 'h-10 px-3'}
-			onclick={() => (editorOpen = true)}
+			variant={phone ? 'ghost' : 'outline'}
+			size={phone ? 'icon' : 'default'}
+			class={phone ? 'size-10' : 'h-10 px-3'}
+			aria-label={phone ? 'Edit' : undefined}
+			onclick={() => setEditing(true)}
 		>
 			<Pencil />
-			Edit
+			{#if !phone}Edit{/if}
 		</Button>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
-					<Button
-						{...props}
-						variant={phone ? 'outline' : 'ghost'}
-						size="icon"
-						class={phone ? 'size-11' : 'size-10'}
-						aria-label="More"
-					>
+					<Button {...props} variant="ghost" size="icon" class="size-10" aria-label="More">
 						<Ellipsis />
 					</Button>
 				{/snippet}
 			</DropdownMenu.Trigger>
 			<DropdownMenu.Content align="end" class="w-auto min-w-44">
+				{#if day && on && r.recurring && day.scheduled && !day.skipped}
+					<DropdownMenu.Item
+						class="min-h-10"
+						onSelect={() => target && actions.skip(target, day.date, true, on)}
+					>
+						<CalendarX2 />
+						Skip just {on}
+					</DropdownMenu.Item>
+					<DropdownMenu.Separator />
+				{/if}
 				{#if dayParam ?? r.nextDate}
 					<DropdownMenu.Item
 						class="min-h-10"
@@ -190,93 +292,47 @@
 		</DropdownMenu.Root>
 	{/snippet}
 
-	<!-- Long titles wrap instead of truncating; on phones the actions move below so the title gets the full width. -->
-	<div class="[&_h1]:text-balance [&_h1]:break-words [&_h1]:whitespace-normal">
-		<PageHeader title={r.title} {back} description={r.summary}>
-			{#snippet actions()}
-				<div class="hidden items-center gap-2 md:flex">{@render requestActionButtons(false)}</div>
-			{/snippet}
-		</PageHeader>
-	</div>
-	<div class="page-column -mt-1 flex gap-2 pb-4 md:hidden">
-		{@render requestActionButtons(true)}
-	</div>
+	{#if editing}
+		<RequestEditor
+			inline
+			bind:open={() => editing, setEditing}
+			focus={editFocus}
+			target={{ kind: 'edit', request: r }}
+			weekStart={me.weekStart}
+		/>
+	{:else}
+		<!-- Long titles wrap instead of truncating. -->
+		<div class="[&_h1]:text-balance [&_h1]:break-words [&_h1]:whitespace-normal">
+			<PageHeader title={r.title} {back} {description} centerActions>
+				{#snippet actions()}
+					<div class="flex items-center gap-1 md:hidden">{@render toolButtons(true)}</div>
+					<div class="hidden items-center gap-2 md:flex">{@render toolButtons(false)}</div>
+				{/snippet}
+			</PageHeader>
+		</div>
+		<!-- The day's prayed and answering, side by side under the header. -->
+		<div class="page-column -mt-1 flex gap-2 pb-6">
+			{@render requestActionButtons()}
+		</div>
 
-	{#key requestId}
-		<div class="page-column flex flex-col gap-6 pb-10">
-			{#if r.answeredOn}
-				<section
-					class="rounded-xl border border-lavender/30 bg-lavender/8 px-4 py-3"
-					aria-label="Answered"
-					transition:slide={{ duration: 200 }}
-				>
-					<p class="flex items-center gap-2 font-display text-lg text-lavender">
-						<Sparkles class="size-4" aria-hidden="true" />
-						Answered {dateLabel(r.answeredOn, today.current)}
-					</p>
-					{#if r.answerNote}
-						<p class="mt-1 text-sm whitespace-pre-wrap">{r.answerNote}</p>
-					{/if}
-				</section>
-			{/if}
-
-			{#if day}
-				{@const on = dayName(day.date, today.current, me.weekStart, true)}
-				<!-- The day's check and skip, right here. -->
-				<section
-					aria-labelledby="day-heading"
-					class={[
-						'divide-y overflow-hidden rounded-xl border bg-card',
-						day.prayed ? 'border-sage/25' : !day.skipped && 'border-candle/25'
-					]}
-				>
-					<h2 id="day-heading" class="sr-only">
-						{dayName(day.date, today.current, me.weekStart)}, {formatDay(day.date, 'month')}
-					</h2>
-					{#if day.skipped}
-						<div class="flex min-h-14 items-center gap-3 px-4">
-							<span
-								class="size-6 shrink-0 rounded-full border-2 border-dashed border-muted-foreground/40"
-								aria-hidden="true"
-							></span>
-							<span class="flex-1 text-muted-foreground">Skipped {on}</span>
-						</div>
-						<button
-							type="button"
-							class="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-candle transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
-							onclick={() => target && actions.skip(target, day.date, false, on)}
-						>
-							<Undo2 class="size-4" aria-hidden="true" />
-							Bring back {on}
-						</button>
-					{:else}
-						<button
-							type="button"
-							aria-pressed={day.prayed}
-							class={[
-								'flex min-h-14 w-full items-center gap-3 px-4 text-left transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none',
-								day.prayed && 'bg-sage/5'
-							]}
-							onclick={() => target && actions.prayed(target, day.date, !day.prayed)}
-						>
-							<CheckMark checked={day.prayed} />
-							<span class="flex-1">{day.prayed ? `Prayed ${on}` : `Pray for this ${on}`}</span>
-						</button>
-						{#if r.recurring && day.scheduled}
-							<button
-								type="button"
-								class="flex min-h-11 w-full items-center gap-3 px-4 text-left text-sm text-muted-foreground transition-colors hover:bg-accent/40 hover:text-foreground focus-visible:bg-accent/40 focus-visible:outline-none"
-								onclick={() => target && actions.skip(target, day.date, true, on)}
-							>
-								<CalendarX2 class="size-4" aria-hidden="true" />
-								Skip just {on}
-							</button>
+		{#key requestId}
+			<div class="page-column flex flex-col gap-6 pb-10 [view-transition-name:request-body]">
+				{#if r.answeredOn}
+					<section
+						class="rounded-xl border border-lavender/30 bg-lavender/8 px-4 py-3"
+						aria-label="Answered"
+						transition:slide={{ duration: 200 }}
+					>
+						<p class="flex items-center gap-2 font-display text-lg text-lavender">
+							<Check class="size-4" aria-hidden="true" />
+							Answered {dateLabel(r.answeredOn, today.current)}
+						</p>
+						{#if r.answerNote}
+							<p class="mt-1 text-sm whitespace-pre-wrap">{r.answerNote}</p>
 						{/if}
-					{/if}
-				</section>
-			{/if}
+					</section>
+				{/if}
 
-			{#if r.notes}
 				<section aria-labelledby="notes-heading">
 					<h2
 						id="notes-heading"
@@ -284,131 +340,119 @@
 					>
 						Notes
 					</h2>
-					<p class="leading-relaxed whitespace-pre-wrap">{r.notes}</p>
+					{#if r.notes}
+						<p class="leading-relaxed whitespace-pre-wrap">{r.notes}</p>
+					{:else}
+						<!-- Where the notes would be: clicking it starts writing them. -->
+						<button
+							type="button"
+							class="-mx-2 -mt-1 w-[calc(100%+1rem)] rounded-md px-2 py-1 text-left leading-relaxed text-muted-foreground/60 transition-colors hover:bg-card focus-visible:bg-card focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+							onclick={() => setEditing(true, 'notes')}
+						>
+							Click to add notes
+						</button>
+					{/if}
 				</section>
-			{/if}
 
-			<section aria-labelledby="schedule-heading" class="rounded-xl border bg-card px-4 py-3">
-				<h2
-					id="schedule-heading"
-					class="font-sans text-xs font-medium tracking-wide text-muted-foreground uppercase"
-				>
-					Schedule
-				</h2>
-				<p class="mt-1 font-display text-lg leading-snug">{r.summary}</p>
-				<p class="mt-0.5 text-sm text-muted-foreground">
-					{[
-						`${r.recurring ? 'Started' : 'On'} ${dateLabel(r.startDate, today.current)}`,
-						r.recurring && r.endDate && !r.answeredOn
-							? `last day ${dateLabel(r.endDate, today.current)}`
-							: undefined
-					]
-						.filter(Boolean)
-						.join(' · ')}
-				</p>
-				{#if r.upcoming.length}
-					<h3 class="mt-4 text-sm font-medium">Coming up</h3>
-					<ul class="mt-1 flex flex-col">
-						{#each r.upcoming as day (day)}
-							<li>
-								<a
-									href={dayHref(day)}
-									class="-mx-2 flex min-h-10 items-center justify-between gap-3 rounded-md px-2 text-sm transition-colors hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-								>
-									<span class={day === today.current ? 'text-candle' : undefined}>
-										{dayName(day, today.current, me.weekStart)}
-									</span>
-									<span class="text-muted-foreground">{dateLabel(day, today.current)}</span>
-								</a>
-							</li>
-						{/each}
-					</ul>
-				{:else if !r.answeredOn}
-					<p class="mt-3 text-sm text-muted-foreground">No more days on its schedule.</p>
+				{#if comingUp.length}
+					<section aria-labelledby="coming-up-heading">
+						<h2
+							id="coming-up-heading"
+							class="mb-2 font-sans text-xs font-medium tracking-wide text-muted-foreground uppercase"
+						>
+							Coming up
+						</h2>
+						<ul class="divide-y overflow-hidden rounded-xl border bg-card">
+							{#each comingUp as { date, skipped } (date)}
+								<li transition:slide={{ duration: 150 }}>
+									{#if skipped}
+										<div class="flex min-h-11 items-center gap-3 pr-2 pl-4 text-sm">
+											<span class="flex-1 text-muted-foreground line-through">
+												{dayName(date, today.current, me.weekStart)}
+											</span>
+											<Button
+												variant="ghost"
+												class="h-9 px-2 text-candle"
+												onclick={() =>
+													target &&
+													actions.skip(
+														target,
+														date,
+														false,
+														dayName(date, today.current, me.weekStart, true)
+													)}
+											>
+												<Undo2 />
+												Bring back
+											</Button>
+										</div>
+									{:else}
+										<a
+											href={dayHref(date)}
+											class="flex min-h-11 items-center justify-between gap-3 px-4 text-sm transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
+										>
+											<span class={date === today.current ? 'text-candle' : undefined}>
+												{dayName(date, today.current, me.weekStart)}
+											</span>
+											<span class="text-muted-foreground">{dateLabel(date, today.current)}</span>
+										</a>
+									{/if}
+								</li>
+							{/each}
+						</ul>
+					</section>
+				{:else if r.recurring && !r.answeredOn && !r.upcoming.length}
+					<p class="text-sm text-muted-foreground">No more days on its schedule.</p>
 				{/if}
-				{#if skippedAhead.length}
-					<h3 class="mt-4 text-sm font-medium">Skipped</h3>
-					<ul class="mt-1 flex flex-col">
-						{#each skippedAhead as day (day)}
-							<li
-								class="flex min-h-10 items-center justify-between gap-3 text-sm"
-								transition:slide={{ duration: 150 }}
-							>
-								<span class="text-muted-foreground line-through">
-									{dateLabel(day, today.current)}
-								</span>
+
+				<!-- The prayed days, folded under their count (as T3 Code folds its snoozed threads). Only for a
+				     request on more than one day: a one-time one's prayed day is the one in the header. -->
+				{#if r.recurring || r.prayedDates.some((date) => date !== r.startDate)}
+					<Collapsible.Root bind:open={prayedOpen}>
+						<Collapsible.Trigger
+							disabled={!r.prayedDates.length}
+							class="flex min-h-11 w-full items-center gap-2 rounded-xl border bg-card px-4 text-sm text-muted-foreground transition-colors focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none enabled:hover:bg-accent/40 enabled:hover:text-foreground"
+						>
+							<span class="flex-1 text-left">Prayed</span>
+							<span class="tabular">{r.prayedCount}</span>
+							<ChevronRight
+								class={[
+									'size-4 transition-transform',
+									prayedOpen && 'rotate-90',
+									!r.prayedDates.length && 'invisible'
+								]}
+								aria-hidden="true"
+							/>
+						</Collapsible.Trigger>
+						<Collapsible.Content>
+							<ul class="flex flex-wrap gap-2 pt-3">
+								{#each history as day (day)}
+									<li>
+										<a
+											href={dayHref(day)}
+											class="flex h-9 items-center rounded-full border border-sage/25 bg-sage/8 px-3 text-sm transition-colors hover:bg-sage/15 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
+											aria-label="Prayed {formatDay(day, 'long')}"
+										>
+											{day === today.current ? 'Today' : dateLabel(day, today.current)}
+										</a>
+									</li>
+								{/each}
+							</ul>
+							{#if r.prayedDates.length > HISTORY_SHOWN}
 								<Button
 									variant="ghost"
-									class="h-9 text-candle"
-									onclick={() =>
-										target &&
-										actions.skip(
-											target,
-											day,
-											false,
-											dayName(day, today.current, me.weekStart, true)
-										)}
+									class="mt-2 h-10 px-2 text-candle"
+									onclick={() => (historyOpen = !historyOpen)}
 								>
-									<Undo2 />
-									Bring back
+									{historyOpen ? 'Show fewer' : `Show all ${r.prayedDates.length}`}
 								</Button>
-							</li>
-						{/each}
-					</ul>
+							{/if}
+						</Collapsible.Content>
+					</Collapsible.Root>
 				{/if}
-			</section>
-
-			<section aria-labelledby="history-heading">
-				<h2
-					id="history-heading"
-					class="mb-2 flex items-baseline justify-between font-sans text-xs font-medium tracking-wide text-muted-foreground uppercase"
-				>
-					Prayed
-					<span class="tabular tracking-normal normal-case">
-						{r.prayedCount === 0
-							? 'not yet'
-							: r.prayedCount === 1
-								? 'once'
-								: `${r.prayedCount} times`}
-					</span>
-				</h2>
-				{#if r.prayedDates.length}
-					<ul class="flex flex-wrap gap-2">
-						{#each history as day (day)}
-							<li>
-								<a
-									href={dayHref(day)}
-									class="flex h-9 items-center rounded-full border border-sage/25 bg-sage/8 px-3 text-sm transition-colors hover:bg-sage/15 focus-visible:ring-3 focus-visible:ring-ring/50 focus-visible:outline-none"
-									aria-label="Prayed {formatDay(day, 'long')}"
-								>
-									{day === today.current ? 'Today' : dateLabel(day, today.current)}
-								</a>
-							</li>
-						{/each}
-					</ul>
-					{#if r.prayedDates.length > HISTORY_SHOWN}
-						<Button
-							variant="ghost"
-							class="mt-2 h-10 px-2 text-candle"
-							onclick={() => (historyOpen = !historyOpen)}
-						>
-							{historyOpen ? 'Show fewer' : `Show all ${r.prayedDates.length}`}
-						</Button>
-					{/if}
-				{:else}
-					<p class="rounded-lg border border-dashed px-4 py-5 text-sm text-muted-foreground">
-						Days you mark it prayed show here.
-					</p>
-				{/if}
-			</section>
-		</div>
-	{/key}
-
-	<RequestEditor
-		bind:open={editorOpen}
-		target={{ kind: 'edit', request: r }}
-		weekStart={me.weekStart}
-	/>
+			</div>
+		{/key}
+	{/if}
 
 	<AdaptiveSheet
 		bind:open={answerOpen}

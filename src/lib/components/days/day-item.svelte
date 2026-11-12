@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { useConvexClient } from 'convex-svelte';
-	import Check from '@lucide/svelte/icons/check';
 	import CalendarX2 from '@lucide/svelte/icons/calendar-x-2';
 	import ExternalLink from '@lucide/svelte/icons/square-arrow-out-up-right';
 	import Pencil from '@lucide/svelte/icons/pencil';
@@ -10,6 +9,7 @@
 	import { api } from '#convex/_generated/api.js';
 	import type { DayItem } from '#convex/days.js';
 	import CheckMark from '#lib/components/check-mark.svelte';
+	import PrayingHands from '#lib/components/praying-hands.svelte';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import { prefetchQuery } from '#lib/convex-query.svelte.js';
 	import { dayName } from '#lib/dates.js';
@@ -70,7 +70,7 @@
 <ContextMenu.Root onOpenChange={(open) => open && (pressOpened = true)}>
 	<ContextMenu.Trigger
 		class={[
-			'flex items-stretch transition-colors [-webkit-touch-callout:none]',
+			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40',
 			item.prayed && 'bg-sage/5'
 		]}
 		onpointerdowncapture={() => (pressOpened = false)}
@@ -100,7 +100,7 @@
 		{/if}
 		<a
 			{href}
-			class="flex min-h-16 min-w-0 flex-1 flex-col justify-center py-3 pr-4 text-left transition-colors hover:bg-accent/40 focus-visible:bg-accent/40 focus-visible:outline-none"
+			class="flex min-h-16 min-w-0 flex-1 flex-col justify-center py-3 pr-4 text-left focus-visible:outline-none"
 			onpointerenter={prefetch}
 			onpointerdown={prefetch}
 		>
@@ -147,7 +147,7 @@
 					<Undo2 />
 					Not prayed yet
 				{:else}
-					<Check />
+					<PrayingHands />
 					Mark prayed
 				{/if}
 			</ContextMenu.Item>
