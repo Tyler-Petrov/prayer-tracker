@@ -82,7 +82,9 @@
 		const skipped = scheduled && request.skipDates.includes(date);
 		const prayed = request.prayedDates.includes(date);
 		if (!scheduled && !prayed) return undefined;
-		return { date, scheduled, skipped, prayed };
+		// Ahead of today it can't be prayed for yet (one already marked can still be taken back).
+		const prayable = date <= today.current || prayed;
+		return { date, scheduled, skipped, prayed, prayable };
 	});
 	// How the page's day reads, mid-sentence: "today", "next Friday".
 	const on = $derived(day && dayName(day.date, today.current, me.weekStart, true));
@@ -208,7 +210,7 @@
 					<Undo2 />
 					Not prayed
 				</Button>
-			{:else}
+			{:else if day.prayable}
 				<Button
 					class="h-11 flex-1"
 					onclick={() =>
@@ -230,8 +232,8 @@
 			</Button>
 		{:else}
 			<Button
-				variant={day ? 'outline' : 'default'}
-				class={['h-11 flex-1', day && '[&_svg]:text-lavender']}
+				variant={day?.prayable ? 'outline' : 'default'}
+				class={['h-11 flex-1', day?.prayable && '[&_svg]:text-lavender']}
 				onclick={startAnswer}
 			>
 				<Check />

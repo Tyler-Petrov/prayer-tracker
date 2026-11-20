@@ -352,12 +352,23 @@ describe('editing', () => {
 		});
 	});
 
+	test('the screen stays on by default, until it’s turned off', async () => {
+		const t = convexTest(schema, modules);
+		const ann = await signedIn(t, 'ann');
+		expect(await ann.query(api.users.me, {})).toMatchObject({ keepScreenOn: true });
+		await ann.mutation(api.users.setKeepScreenOn, { keepScreenOn: false });
+		expect(await ann.query(api.users.me, {})).toMatchObject({ keepScreenOn: false });
+		await ann.mutation(api.users.setKeepScreenOn, { keepScreenOn: true });
+		expect(await ann.query(api.users.me, {})).toMatchObject({ keepScreenOn: true });
+	});
+
 	test('weekly rules count weeks from the person’s first day', async () => {
 		const t = convexTest(schema, modules);
 		const ann = await signedIn(t, 'ann');
 		expect(await ann.query(api.users.me, {})).toEqual({
 			email: 'ann@example.com',
-			weekStart: 'SU'
+			weekStart: 'SU',
+			keepScreenOn: true
 		});
 		await ann.mutation(api.users.setWeekStart, { weekStart: 'MO' });
 		const requestId = await ann.mutation(api.requests.create, {

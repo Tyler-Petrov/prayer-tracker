@@ -48,7 +48,9 @@ export default defineSchema({
 		tokenIdentifier: v.string(),
 		email: v.optional(v.string()),
 		/** The first day of the week on the Days tab and for new weekly rules; Sunday when unset. */
-		weekStart: v.optional(vWeekStart)
+		weekStart: v.optional(vWeekStart),
+		/** Whether the Days tab keeps this person's screen awake; missing means yes. */
+		keepScreenOn: v.optional(v.boolean())
 	}).index('by_tokenIdentifier', ['tokenIdentifier']),
 
 	/** Something someone is praying for, once or on a schedule. */

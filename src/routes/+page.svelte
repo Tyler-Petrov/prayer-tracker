@@ -27,6 +27,7 @@
 	import { requestActions } from '#lib/request-actions.js';
 	import { daysArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
+	import { keepScreenOn } from '#lib/wake-lock.svelte.js';
 
 	type Range = { from: string; to: string };
 	/** How many days the list grows by at a time, at either end. */
@@ -63,6 +64,7 @@
 		]).then(([days, requests, me]) => ({ range, days, requests, me }));
 	}
 	const me = $derived(loaded.me);
+	keepScreenOn(() => me.keepScreenOn);
 	const rows = $derived(new Map(loaded.requests.rows.map((row) => [row.requestId, row])));
 	const actions = requestActions();
 
