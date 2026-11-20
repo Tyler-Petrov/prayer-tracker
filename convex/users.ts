@@ -44,6 +44,7 @@ export const setWeekStart = userMutation({
 /** Whether the Days tab keeps the screen awake. On is the default, so it's stored only when off. */
 export const setKeepScreenOn = userMutation({
 	args: { keepScreenOn: v.boolean() },
+	returns: v.null(),
 	handler: async (ctx, { keepScreenOn }) => {
 		await ctx.db.patch('users', ctx.userId, { keepScreenOn: keepScreenOn ? undefined : false });
 	}
