@@ -30,7 +30,8 @@ class Keyboard {
 
 	get height() {
 		this.#subscribe();
-		return window.visualViewport?.height ?? window.innerHeight;
+		const viewport = window.visualViewport;
+		return viewport && viewport.scale <= 1.01 ? viewport.height : window.innerHeight;
 	}
 }
 
