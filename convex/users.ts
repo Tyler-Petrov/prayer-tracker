@@ -1,5 +1,6 @@
 // Who's signed in, as the app knows them. Clerk does the signing in (Google only); this makes each person's user
 // the first time, and the app waits for it before showing anything.
+import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import { requireIdentity, userMutation, userQuery } from './functions';
 import { vWeekStart } from './schema';
@@ -27,7 +28,8 @@ export const me = userQuery({
 	args: {},
 	handler: async (ctx) => ({
 		email: ctx.user.email ?? null,
-		weekStart: ctx.user.weekStart ?? 'SU'
+		weekStart: ctx.user.weekStart ?? 'SU',
+		keepScreenOn: ctx.user.keepScreenOn !== false
 	})
 });
 
@@ -36,5 +38,14 @@ export const setWeekStart = userMutation({
 	args: { weekStart: vWeekStart },
 	handler: async (ctx, { weekStart }) => {
 		await ctx.db.patch('users', ctx.userId, { weekStart });
+	}
+});
+
+/** Whether the Days tab keeps the screen awake. On is the default, so it's stored only when off. */
+export const setKeepScreenOn = userMutation({
+	args: { keepScreenOn: v.boolean() },
+	returns: v.null(),
+	handler: async (ctx, { keepScreenOn }) => {
+		await ctx.db.patch('users', ctx.userId, { keepScreenOn: keepScreenOn ? undefined : false });
 	}
 });

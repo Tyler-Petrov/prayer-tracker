@@ -42,6 +42,8 @@
 
 	const on = $derived(dayName(date, today.current, weekStart, true));
 	const answeredHere = $derived(item.answeredOn === date);
+	// A day that hasn't come yet can't be prayed for: no check. One already marked keeps it, to take it back.
+	const checkable = $derived(date <= today.current || item.prayed);
 
 	function prayed(value: boolean, withToast: boolean) {
 		void actions.prayed(
@@ -82,8 +84,11 @@
 			e.stopPropagation();
 		}}
 	>
-		{#if item.skipped}
-			<!-- Skipped: nothing to check; the sheet or menu brings it back. -->
+		{#if !checkable}
+			<!-- Ahead of today: nothing to check yet, so the title starts where the check would. -->
+			<span class="w-4 shrink-0" aria-hidden="true"></span>
+		{:else if item.skipped}
+			<!-- Skipped: nothing to check; the page or menu brings it back. -->
 			<span class="grid w-14 shrink-0 place-items-center" aria-hidden="true">
 				<span class="size-6 rounded-full border-2 border-dashed border-muted-foreground/40"></span>
 			</span>
@@ -141,7 +146,7 @@
 	<!-- Below the press, not beside it: beside, a press past the middle of a phone flips the menu left, and
 	     nothing shifts it back across (floating-ui shifts along the side only), so it hung off the left edge. -->
 	<ContextMenu.Content side="bottom" align="start" collisionPadding={8} class="w-60">
-		{#if !item.skipped}
+		{#if !item.skipped && checkable}
 			<ContextMenu.Item onSelect={() => prayed(!item.prayed, true)}>
 				{#if item.prayed}
 					<Undo2 />

@@ -10,6 +10,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 	import { convexQuery } from '#lib/convex-query.svelte.js';
 	import { toastError } from '#lib/errors.js';
@@ -22,6 +23,7 @@
 	const clerk = useClerkContext();
 	const me = $derived(await convexQuery(api.users.me, {}));
 	const saveWeekStart = useMutation(api.users.setWeekStart);
+	const saveKeepScreenOn = useMutation(api.users.setKeepScreenOn);
 
 	function setWeekStart(weekStart: string) {
 		if (weekStart !== 'SU' && weekStart !== 'MO') return; // a second tap on the chosen one clears it
@@ -31,6 +33,18 @@
 				optimisticUpdate: (store) => {
 					const current = store.getQuery(api.users.me, {});
 					if (current) store.setQuery(api.users.me, {}, { ...current, weekStart });
+				}
+			}
+		).catch(toastError);
+	}
+
+	function setKeepScreenOn(keepScreenOn: boolean) {
+		saveKeepScreenOn(
+			{ keepScreenOn },
+			{
+				optimisticUpdate: (store) => {
+					const current = store.getQuery(api.users.me, {});
+					if (current) store.setQuery(api.users.me, {}, { ...current, keepScreenOn });
 				}
 			}
 		).catch(toastError);
@@ -70,6 +84,16 @@
 				<p class="text-sm text-muted-foreground">
 					Where the Days tab divides weeks, and how "every other week" counts them for new requests.
 				</p>
+			</div>
+			<div class="flex items-center justify-between gap-4">
+				<div class="flex flex-col gap-1">
+					<Label for="keep-screen-on">Keep screen on</Label>
+					<p class="text-sm text-muted-foreground">
+						Your screen won't dim or lock while the Days tab is open, so you can pray through the
+						list.
+					</p>
+				</div>
+				<Switch id="keep-screen-on" bind:checked={() => me.keepScreenOn, setKeepScreenOn} />
 			</div>
 		</Card.Content>
 	</Card.Root>
