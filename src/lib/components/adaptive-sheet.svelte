@@ -3,6 +3,7 @@
 	import { MediaQuery } from 'svelte/reactivity';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Drawer from '#lib/components/ui/drawer/index.js';
+	import { keyboard } from '#lib/keyboard.svelte.js';
 
 	let {
 		open = $bindable(false),
@@ -22,6 +23,34 @@
 	} = $props();
 
 	const desktop = new MediaQuery('min-width: 768px');
+
+	// With the keyboard up, the drawer sits on top of it and fits in what's left of the screen, so the header and
+	// the field being typed in stay visible and the body scrolls. Browsers either shrink only the visual viewport
+	// (the keyboard covers the page: `inset`) or the whole page (`height` shrinks and `80vh` may not), so both are
+	// handled. Vaul's own handling of this (`repositionInputs`) kept the drawer as tall as it was before the
+	// keyboard opened, and on Android pushed its top off the screen.
+	let drawer = $state<HTMLElement | null>(null);
+	const phone = $derived(open && !desktop.current);
+	const inset = $derived(phone ? keyboard.inset : 0);
+	const height = $derived(phone ? keyboard.height : 0);
+	const fitted = $derived(
+		phone
+			? [
+					`max-height: min(80vh, calc(${height}px - env(safe-area-inset-top) - 0.5rem))`,
+					inset && `bottom: ${inset}px; padding-bottom: 0`
+				]
+					.filter(Boolean)
+					.join('; ')
+			: undefined
+	);
+
+	$effect(() => {
+		if (!height) return;
+		const focused = document.activeElement;
+		if (focused instanceof HTMLElement && drawer?.contains(focused)) {
+			focused.scrollIntoView({ block: 'nearest' });
+		}
+	});
 </script>
 
 {#if desktop.current}
@@ -47,8 +76,12 @@
 		</Dialog.Content>
 	</Dialog.Root>
 {:else}
-	<Drawer.Root bind:open>
-		<Drawer.Content class={['pb-[env(safe-area-inset-bottom)]', tall && 'h-[80dvh]']}>
+	<Drawer.Root bind:open repositionInputs={false}>
+		<Drawer.Content
+			bind:ref={drawer}
+			class={['pb-[env(safe-area-inset-bottom)]', tall && 'h-[80dvh]']}
+			style={fitted}
+		>
 			<Drawer.Header>
 				<Drawer.Title class="font-display text-xl">{title}</Drawer.Title>
 				{#if description}
