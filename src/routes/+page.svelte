@@ -9,13 +9,15 @@
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
+	import BookOpen from '@lucide/svelte/icons/book-open';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { api } from '#convex/_generated/api.js';
 	import type { Id } from '#convex/_generated/dataModel.js';
-	import type { DayItem as Item } from '#convex/days.js';
+	import type { DayItem as Item, DayReading as Reading } from '#convex/days.js';
 	import { addDays, daysBetween, isDate, MAX_RANGE_DAYS } from '#convex/shared/recurrence.js';
 	import { weekStart } from '#convex/shared/weeks.js';
 	import DayItem from '#lib/components/days/day-item.svelte';
+	import DayReading from '#lib/components/days/day-reading.svelte';
 	import RequestEditor, { type EditorTarget } from '#lib/components/requests/request-editor.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Calendar } from '#lib/components/ui/calendar/index.js';
@@ -24,6 +26,7 @@
 	import { dayName, formatDay, isDay, weekLabel } from '#lib/dates.js';
 	import { daysView } from '#lib/days-view.svelte.js';
 	import { Detent } from '#lib/detent.svelte.js';
+	import { readingActions } from '#lib/reading-actions.js';
 	import { requestActions } from '#lib/request-actions.js';
 	import { daysArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
@@ -67,6 +70,7 @@
 	keepScreenOn(() => me.keepScreenOn);
 	const rows = $derived(new Map(loaded.requests.rows.map((row) => [row.requestId, row])));
 	const actions = requestActions();
+	const reading = readingActions();
 
 	/** Set while the page scrolls, and for a moment after. */
 	let scrolling = $state(false);
@@ -97,18 +101,19 @@
 		const { from, to } = shown.range;
 		return Array.from({ length: daysBetween(from, to) + 1 }, (_, i) => addDays(from, i));
 	});
-	// Each day's requests. A day's list is reused while its requests are unchanged, so it isn't touched when
-	// other days change (days added above, a check on another day).
-	type DayList = { json: string; items: Item[] };
+	// Each day's requests and Bible readings. A day's lists are reused while they're unchanged, so it isn't
+	// touched when other days change (days added above, a check on another day).
+	type DayList = { json: string; items: Item[]; readings: Reading[] };
 	let lists = new Map<string, DayList>();
 	const byDay = $derived.by(() => {
-		const found = new Map((shown?.days ?? []).map((day) => [day.date, day.items]));
+		const found = new Map((shown?.days ?? []).map((day) => [day.date, day]));
 		const next = new Map(
 			dates.map((date): [string, DayList] => {
-				const items = found.get(date) ?? [];
-				const json = JSON.stringify(items);
+				const items = found.get(date)?.items ?? [];
+				const readings = found.get(date)?.readings ?? [];
+				const json = JSON.stringify([items, readings]);
 				const old = lists.get(date);
-				return [date, old?.json === json ? old : { json, items }];
+				return [date, old?.json === json ? old : { json, items, readings }];
 			})
 		);
 		lists = next;
@@ -426,6 +431,7 @@
 			{#key shown.range}<div {@attach near(() => grow('from'))}></div>{/key}
 			{#each dates as day (day)}
 				{@const items = byDay.get(day)!.items}
+				{@const readings = byDay.get(day)!.readings}
 				{@const isToday = day === today.current}
 				{@const due = items.filter((i) => !i.skipped)}
 				{@const done = due.filter((i) => i.prayed).length}
@@ -519,6 +525,34 @@
 							<Plus class="size-4" />
 							Add a request
 						</button>
+					{/if}
+					{#if readings.length}
+						<!-- Bible reading: its own list, below the day's requests. -->
+						<div class="mt-3" transition:slide={{ duration: 150 }}>
+							<p
+								class="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
+							>
+								<BookOpen class="size-3.5" aria-hidden="true" />
+								Bible reading
+							</p>
+							<ul
+								class={[
+									'divide-y divide-border overflow-hidden rounded-xl border bg-card',
+									isToday && 'border-candle/25'
+								]}
+							>
+								{#each readings as r (r.readingId)}
+									<li transition:slide={{ duration: 150 }}>
+										<DayReading
+											reading={r}
+											date={day}
+											href={resolve('/requests/reading/[planId]', { planId: r.planId })}
+											actions={reading}
+										/>
+									</li>
+								{/each}
+							</ul>
+						</div>
 					{/if}
 				</section>
 			{/each}

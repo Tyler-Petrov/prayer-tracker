@@ -35,7 +35,7 @@ function patchDays(
 				});
 				return { ...day, items };
 			})
-			.filter((day) => day.items.length > 0);
+			.filter((day) => day.items.length > 0 || day.readings.length > 0);
 		if (changed) store.setQuery(api.days.range, args, next);
 	}
 }
@@ -189,5 +189,97 @@ export function optimisticRemoved(requestId: RequestId) {
 			() => null
 		);
 		patchRequest(store, requestId, () => null);
+	};
+}
+
+/**
+ * reading.setRead: the reading checked (or not) on every loaded day and plan page, and its plan's chapters read
+ * and next reading on the Requests tab. Which reading is next, and how far behind, arrive with the server.
+ */
+export function optimisticRead(
+	reading: { readingId: Id<'readings'>; planId: Id<'readingPlans'>; from: number; to: number },
+	read: boolean
+) {
+	const chapters = reading.to - reading.from + 1;
+	return (store: OptimisticLocalStore) => {
+		let was: boolean | undefined;
+		for (const { args, value } of daysOf(store)) {
+			if (!value) continue;
+			let changed = false;
+			const next = value.map((day) => {
+				if (!day.readings.some((r) => r.readingId === reading.readingId)) return day;
+				changed = true;
+				return {
+					...day,
+					readings: day.readings.map((r) => {
+						if (r.readingId !== reading.readingId) return r;
+						was = r.read;
+						return { ...r, read };
+					})
+				};
+			});
+			if (changed) store.setQuery(api.days.range, args, next);
+		}
+		for (const { args, value } of store.getAllQueries(api.reading.get)) {
+			if (!value || value.planId !== reading.planId) continue;
+			was ??= value.readings.find((r) => r.readingId === reading.readingId)?.read;
+			const readings = value.readings.map((r) =>
+				r.readingId === reading.readingId ? { ...r, read } : r
+			);
+			const next = readings.find((r) => !r.read);
+			store.setQuery(api.reading.get, args, {
+				...value,
+				readings,
+				next: next
+					? { readingId: next.readingId, date: next.date, from: next.from, to: next.to }
+					: null
+			});
+		}
+		if (was === read) return;
+		const change = read ? chapters : -chapters;
+		for (const { args, value } of store.getAllQueries(api.reading.list)) {
+			if (!value) continue;
+			store.setQuery(
+				api.reading.list,
+				args,
+				value.map((plan) =>
+					plan.planId === reading.planId
+						? { ...plan, chaptersRead: Math.max(0, plan.chaptersRead + change) }
+						: plan
+				)
+			);
+		}
+		for (const { args, value } of store.getAllQueries(api.reading.get)) {
+			if (!value || value.planId !== reading.planId) continue;
+			store.setQuery(api.reading.get, args, {
+				...value,
+				chaptersRead: Math.max(0, value.chaptersRead + change)
+			});
+		}
+	};
+}
+
+/** reading.remove: its plan and readings, gone everywhere. */
+export function optimisticPlanRemoved(planId: Id<'readingPlans'>) {
+	return (store: OptimisticLocalStore) => {
+		for (const { args, value } of daysOf(store)) {
+			if (!value || !value.some((day) => day.readings.some((r) => r.planId === planId))) continue;
+			store.setQuery(
+				api.days.range,
+				args,
+				value
+					.map((day) => ({ ...day, readings: day.readings.filter((r) => r.planId !== planId) }))
+					.filter((day) => day.items.length > 0 || day.readings.length > 0)
+			);
+		}
+		for (const { args, value } of store.getAllQueries(api.reading.list))
+			if (value)
+				store.setQuery(
+					api.reading.list,
+					args,
+					value.filter((plan) => plan.planId !== planId)
+				);
+		for (const { args, value } of store.getAllQueries(api.reading.get))
+			if (value?.planId === planId) store.setQuery(api.reading.get, args, null);
 	};
 }

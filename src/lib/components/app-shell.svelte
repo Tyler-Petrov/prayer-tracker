@@ -7,7 +7,7 @@
 	import { api } from '#convex/_generated/api.js';
 	import { convexQuery } from '#lib/convex-query.svelte.js';
 	import { daysView } from '#lib/days-view.svelte.js';
-	import { daysArgs, requestsArgs } from '#lib/tab-queries.js';
+	import { daysArgs, readingListArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { cn } from '#lib/utils.js';
 	import AccountButton from './account-button.svelte';
@@ -21,6 +21,7 @@
 		convexQuery(api.days.range, daysArgs(today.current)),
 		convexQuery(api.days.range, daysView.range),
 		convexQuery(api.requests.list, requestsArgs(today.current)),
+		convexQuery(api.reading.list, readingListArgs(today.current)),
 		convexQuery(api.users.me, {})
 	]);
 	// Read, so the deriveds (and with them the subscriptions) stay alive.

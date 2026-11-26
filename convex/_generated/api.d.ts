@@ -11,9 +11,12 @@
 import type * as days from "../days.js";
 import type * as functions from "../functions.js";
 import type * as model_prayers from "../model/prayers.js";
+import type * as model_reading from "../model/reading.js";
 import type * as model_requests from "../model/requests.js";
 import type * as prayers from "../prayers.js";
+import type * as reading from "../reading.js";
 import type * as requests from "../requests.js";
+import type * as shared_bible from "../shared/bible.js";
 import type * as shared_recurrence from "../shared/recurrence.js";
 import type * as shared_weeks from "../shared/weeks.js";
 import type * as users from "../users.js";
@@ -28,9 +31,12 @@ declare const fullApi: ApiFromModules<{
   days: typeof days;
   functions: typeof functions;
   "model/prayers": typeof model_prayers;
+  "model/reading": typeof model_reading;
   "model/requests": typeof model_requests;
   prayers: typeof prayers;
+  reading: typeof reading;
   requests: typeof requests;
+  "shared/bible": typeof shared_bible;
   "shared/recurrence": typeof shared_recurrence;
   "shared/weeks": typeof shared_weeks;
   users: typeof users;

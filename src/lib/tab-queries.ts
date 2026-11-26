@@ -14,3 +14,12 @@ export const requestArgs = <Id extends string>(requestId: Id, today: string) => 
 	requestId,
 	today
 });
+
+/** Requests tab, below the requests: the Bible reading plans, as of today. */
+export const readingListArgs = (today: string) => ({ today });
+
+/** A reading plan's page, as of today. */
+export const readingPlanArgs = <Id extends string>(planId: Id, today: string) => ({
+	planId,
+	today
+});

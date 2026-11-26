@@ -169,8 +169,16 @@ describe('days.range', () => {
 		});
 		const days = await ann.query(api.days.range, { from: '2026-11-01', to: '2026-11-30' });
 		expect(days).toEqual([
-			{ date: '2026-11-10', items: [expect.objectContaining({ prayed: true, scheduled: false })] },
-			{ date: '2026-11-12', items: [expect.objectContaining({ prayed: false, scheduled: true })] }
+			{
+				date: '2026-11-10',
+				items: [expect.objectContaining({ prayed: true, scheduled: false })],
+				readings: []
+			},
+			{
+				date: '2026-11-12',
+				items: [expect.objectContaining({ prayed: false, scheduled: true })],
+				readings: []
+			}
 		]);
 	});
 

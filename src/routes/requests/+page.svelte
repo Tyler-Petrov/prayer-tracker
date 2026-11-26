@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import BookOpen from '@lucide/svelte/icons/book-open';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import HandHeart from '@lucide/svelte/icons/hand-heart';
 	import Plus from '@lucide/svelte/icons/plus';
@@ -10,23 +11,28 @@
 	import type { RequestView } from '#convex/model/requests.js';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import RequestEditor from '#lib/components/requests/request-editor.svelte';
+	import ReadingEditor from '#lib/components/reading/reading-editor.svelte';
+	import ReadingRow from '#lib/components/reading/reading-row.svelte';
 	import RequestRow from '#lib/components/requests/request-row.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { convexQuery } from '#lib/convex-query.svelte.js';
-	import { requestsArgs } from '#lib/tab-queries.js';
+	import { readingListArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { cn } from '#lib/utils.js';
 
 	// Kept subscribed by the app shell, so the tab opens at once.
-	const [list, me] = $derived(
+	const [list, me, plans] = $derived(
 		await Promise.all([
 			convexQuery(api.requests.list, requestsArgs(today.current)),
-			convexQuery(api.users.me, {})
+			convexQuery(api.users.me, {}),
+			convexQuery(api.reading.list, readingListArgs(today.current))
 		])
 	);
+	const reading = $derived(plans.filter((plan) => plan.next));
+	const finished = $derived(plans.filter((plan) => !plan.next));
 	const requests = $derived(list.rows);
 
 	// The list is one person's, so it's searched here, as typed: sections stay in place while filtering.
@@ -58,6 +64,8 @@
 	let pastOpen = $state(false);
 	let answeredOpen = $state(true);
 	let editorOpen = $state(false);
+	let finishedOpen = $state(false);
+	let readingEditorOpen = $state(false);
 </script>
 
 <PageHeader title="Requests">
@@ -196,6 +204,71 @@
 		{/if}
 	{/if}
 </div>
+
+<!-- Bible reading: plans to read through a book, below the requests (each day's reading shows on Days). Not
+     part of the search, so it steps aside while searching. -->
+{#if !search}
+	<section aria-labelledby="reading-heading" class="page-column pb-10">
+		<div class="flex min-h-11 items-center justify-between gap-3 border-t pt-8">
+			<h2 id="reading-heading" class="flex items-center gap-2 font-display text-xl">
+				<BookOpen class="size-5 text-candle" aria-hidden="true" />
+				Bible reading
+			</h2>
+			{#if plans.length}
+				<Button variant="outline" class="h-11 px-3" onclick={() => (readingEditorOpen = true)}>
+					<Plus />Read a book
+				</Button>
+			{/if}
+		</div>
+		{#if !plans.length}
+			<div
+				class="mt-3 flex flex-col items-start gap-3 rounded-lg border border-dashed px-4 py-5 text-sm text-muted-foreground"
+			>
+				<p>
+					Read through a book of the Bible a few chapters at a time. Pick where you are and how
+					often you read, and each day's chapters show on Days until you reach the end.
+				</p>
+				<Button class="h-11 px-4" onclick={() => (readingEditorOpen = true)}>
+					<Plus />Read a book
+				</Button>
+			</div>
+		{:else}
+			{#if reading.length}
+				<ul class="mt-3 grid gap-2 md:grid-cols-2">
+					{#each reading as plan (plan.planId)}
+						<li transition:slide={{ duration: 200 }}><ReadingRow {plan} /></li>
+					{/each}
+				</ul>
+			{/if}
+			{#if finished.length}
+				<Collapsible.Root bind:open={finishedOpen} class={reading.length ? 'mt-6' : 'mt-3'}>
+					<Collapsible.Trigger
+						class="flex min-h-11 w-full items-center justify-between gap-3 rounded-md text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+					>
+						<span class="text-sm font-medium text-muted-foreground">
+							Finished <span class="tabular font-normal">({finished.length})</span>
+						</span>
+						<ChevronDown
+							class={cn(
+								'size-5 shrink-0 text-muted-foreground transition-transform',
+								finishedOpen && 'rotate-180'
+							)}
+						/>
+					</Collapsible.Trigger>
+					<Collapsible.Content>
+						<ul class="grid gap-2 pt-2 md:grid-cols-2">
+							{#each finished as plan (plan.planId)}
+								<li transition:slide={{ duration: 200 }}><ReadingRow {plan} /></li>
+							{/each}
+						</ul>
+					</Collapsible.Content>
+				</Collapsible.Root>
+			{/if}
+		{/if}
+	</section>
+{/if}
+
+<ReadingEditor bind:open={readingEditorOpen} target={{ kind: 'add' }} weekStart={me.weekStart} />
 
 {#snippet pastNote()}
 	<p class="pt-1 text-sm text-muted-foreground">

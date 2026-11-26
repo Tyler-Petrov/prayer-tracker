@@ -73,6 +73,11 @@ people's emails.
   Items: `src/lib/components/days/`.
 - **Requests** (`/requests`, `/requests/[requestId]`) and the request editor sheet
   (`src/lib/components/requests/request-editor.svelte`, used for adding and editing everywhere).
+- **Bible reading**: a `readingPlans` row (book, chapters each time, where they are, a recurrence rule) and one
+  `readings` row per scheduled day until the book ends. `convex/shared/bible.ts` has the books and plans the
+  readings (the editor's preview uses it too); changing a plan keeps readings already read and plans the rest
+  again (`replan` in `convex/model/reading.ts`). Shown under the requests on Days and on `/requests`, each plan
+  at `/requests/reading/[planId]`; quick actions in `src/lib/reading-actions.ts`.
 - **Optimistic updates** for the request mutations are in `src/lib/optimistic.ts`; `src/lib/request-actions.ts`
   wraps the quick actions (prayed, skip a day, answer, delete) with them and with toasts.
 - **Query cache** (`src/lib/cache.svelte.ts`): each cached query is made in an effect root of its own. Made in
