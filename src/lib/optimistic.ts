@@ -235,7 +235,7 @@ export function optimisticRead(
 					: null
 			});
 		}
-		if (was === read) return;
+		if (was === undefined || was === read) return;
 		const change = read ? chapters : -chapters;
 		for (const { args, value } of store.getAllQueries(api.reading.list)) {
 			if (!value) continue;
