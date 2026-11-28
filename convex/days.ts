@@ -138,7 +138,9 @@ export const range = userQuery({
 				if (!scheduled.has(date)) add(date, request, false, false);
 		}
 		const readingsOn = new Map<YMD, DayReading[]>();
-		for (const reading of readings.sort((a, b) => bookOrder(a.book) - bookOrder(b.book))) {
+		for (const reading of readings.sort(
+			(a, b) => bookOrder(a.book) - bookOrder(b.book) || a.from - b.from
+		)) {
 			if (!days.has(reading.date)) days.set(reading.date, []);
 			let list = readingsOn.get(reading.date);
 			if (!list) readingsOn.set(reading.date, (list = []));

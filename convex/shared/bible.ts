@@ -111,6 +111,13 @@ export const chapterCount = (n: number) => `${n} ${n === 1 ? 'chapter' : 'chapte
 export type ReadingRepeat =
 	{ kind: 'daily'; interval: number } | { kind: 'weekly'; interval: number; weekdays: Weekday[] };
 
+/**
+ * What reading plans do (a setting, for all of a person's plans) when a reading's day goes by unread: leave it on its day and carry on with today's ('leave'),
+ * move it to today to read with today's ('double'), or carry on from it today, the rest of the book later
+ * ('push').
+ */
+export type MissedReadings = 'leave' | 'double' | 'push';
+
 /** The editor's fields, apart from the book. */
 export type ReadingPlanFields = {
 	/** The chapter to read next: where they are in the book. */

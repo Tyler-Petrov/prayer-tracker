@@ -24,7 +24,7 @@ const HISTORY_MAX = 400;
 const ANSWER_NOTE_MAX = 2000;
 
 /**
- * Everything the caller is praying for, for the Requests tab, as of `today` (their local day). Each row's
+ * Everything the caller is praying for, for the Requests list, as of `today` (their local day). Each row's
  * `section` says where it goes: 'active' (happens today or later), 'past' (a one-time day gone by, or a schedule
  * that has ended) or 'answered'. Sorted: active by next date, past by last date (latest first), answered by
  * answer date (latest first); then by title.

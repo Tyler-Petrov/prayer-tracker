@@ -3,11 +3,12 @@
 	import { navigating, page } from '$app/state';
 	import { resolve } from '$app/paths';
 	import CalendarDays from '@lucide/svelte/icons/calendar-days';
-	import HandHeart from '@lucide/svelte/icons/hand-heart';
+	import ChartNoAxesColumn from '@lucide/svelte/icons/chart-no-axes-column';
+	import { useMutation } from 'convex-svelte';
 	import { api } from '#convex/_generated/api.js';
 	import { convexQuery } from '#lib/convex-query.svelte.js';
 	import { daysView } from '#lib/days-view.svelte.js';
-	import { daysArgs, readingListArgs, requestsArgs } from '#lib/tab-queries.js';
+	import { daysArgs, overviewArgs, readingListArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { cn } from '#lib/utils.js';
 	import AccountButton from './account-button.svelte';
@@ -17,26 +18,49 @@
 	// Keep each tab's default view subscribed (convexQuery's shared cache), so switching to it finds the
 	// answer already here and the page's `await` doesn't wait. The Days tab's are the days around today and
 	// those around where it was left (the same query when that's today).
+	const plans = $derived(convexQuery(api.reading.list, readingListArgs(today.current)));
+	const me = $derived(convexQuery(api.users.me, {}));
 	const preloads = $derived([
 		convexQuery(api.days.range, daysArgs(today.current)),
 		convexQuery(api.days.range, daysView.range),
 		convexQuery(api.requests.list, requestsArgs(today.current)),
-		convexQuery(api.reading.list, readingListArgs(today.current)),
-		convexQuery(api.users.me, {})
+		convexQuery(api.overview.stats, overviewArgs(today.current)),
+		plans,
+		me
 	]);
 	// Read, so the deriveds (and with them the subscriptions) stay alive.
 	$effect(() => void preloads);
 
+	// Unless the person's setting leaves missed readings on their days, a reading plan moves them to today, or
+	// pushes itself back, as soon as it's behind: on opening the app, when the day rolls over, and when the
+	// setting changes.
+	const catchUp = useMutation(api.reading.catchUp);
+	let catchingUp = false;
+	$effect(() => {
+		const day = today.current;
+		const missed = me.current?.missedReadings;
+		const due = missed && missed !== 'leave' && plans.current?.some((plan) => plan.behind);
+		if (!due || catchingUp) return;
+		catchingUp = true;
+		catchUp({ today: day })
+			.catch((error) => console.error('Catching up reading plans', error))
+			.finally(() => (catchingUp = false));
+	});
+
 	const tabs = [
 		{ href: resolve('/'), label: 'Days', icon: CalendarDays },
-		{ href: resolve('/requests'), label: 'Requests', icon: HandHeart }
+		{ href: resolve('/overview'), label: 'Overview', icon: ChartNoAxesColumn }
 	];
 
 	// The tab being navigated to lights up on click, not when its page has rendered.
 	const path = $derived((navigating.to?.url ?? page.url).pathname);
 
 	function isActive(href: string) {
-		return href === resolve('/') ? path === href : path.startsWith(href);
+		if (href === resolve('/')) return path === href;
+		// Requests and reading plans open from Overview: it stays lit on their pages.
+		if (href === resolve('/overview'))
+			return path.startsWith(href) || path.startsWith(resolve('/requests'));
+		return path.startsWith(href);
 	}
 </script>
 

@@ -15,6 +15,9 @@ export const vWeekday = v.union(
 );
 export const vWeekStart = v.union(v.literal('SU'), v.literal('MO'));
 
+/** shared/bible.ts MissedReadings. */
+export const vMissedReadings = v.union(v.literal('leave'), v.literal('double'), v.literal('push'));
+
 /** A reading plan's editor fields (shared/bible.ts `ReadingPlanFields`). */
 export const vReadingPlanFields = v.object({
 	fromChapter: v.number(),
@@ -70,7 +73,9 @@ export default defineSchema({
 		/** The first day of the week on the Days tab and for new weekly rules; Sunday when unset. */
 		weekStart: v.optional(vWeekStart),
 		/** Whether the Days tab keeps this person's screen awake; missing means yes. */
-		keepScreenOn: v.optional(v.boolean())
+		keepScreenOn: v.optional(v.boolean()),
+		/** What their reading plans do with a reading whose day went by unread (reading.catchUp); unset is 'push'. */
+		missedReadings: v.optional(vMissedReadings)
 	}).index('by_tokenIdentifier', ['tokenIdentifier']),
 
 	/** Something someone is praying for, once or on a schedule. */
@@ -132,7 +137,10 @@ export default defineSchema({
 		updatedAt: v.number()
 	}).index('by_userId', ['userId']),
 
-	/** One day's reading in a plan: chapters `from` through `to` of `book`. One per plan and day. */
+	/**
+	 * One day's reading in a plan: chapters `from` through `to` of `book`. One per plan and day, except when missed
+	 * readings move to today (the person's `missedReadings: 'double'`).
+	 */
 	readings: defineTable({
 		userId: v.id('users'),
 		planId: v.id('readingPlans'),

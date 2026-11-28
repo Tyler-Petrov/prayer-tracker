@@ -194,7 +194,7 @@ export function optimisticRemoved(requestId: RequestId) {
 
 /**
  * reading.setRead: the reading checked (or not) on every loaded day and plan page, and its plan's chapters read
- * and next reading on the Requests tab. Which reading is next, and how far behind, arrive with the server.
+ * and next reading on Overview. Which reading is next, and how far behind, arrive with the server.
  */
 export function optimisticRead(
 	reading: { readingId: Id<'readings'>; planId: Id<'readingPlans'>; from: number; to: number },

@@ -6,6 +6,7 @@ import {
 	planReadings,
 	planSchedule,
 	validatePlan,
+	type MissedReadings,
 	type ReadingPlanFields
 } from '../shared/bible';
 import { describeSchedule, parseRRule, toRRule, type YMD } from '../shared/recurrence';
@@ -67,6 +68,8 @@ export async function planView(ctx: QueryCtx, plan: Doc<'readingPlans'>, today: 
 		book: plan.book,
 		fields,
 		summary: planSummary(fields, today),
+		/** How often it's read, in words ("Every day", "Weekly on Mon, Wed, Fri"). */
+		repeats: describeSchedule(planSchedule(fields), today),
 		chaptersRead: plan.chaptersRead,
 		chaptersTotal: plan.chaptersTotal,
 		next: next && { readingId: next._id, date: next.date, from: next.from, to: next.to },
@@ -125,6 +128,37 @@ export async function replan(
 		chaptersTotal: chaptersRead + planned.reduce((sum, reading) => sum + chapters(reading), 0),
 		updatedAt: Date.now()
 	});
+}
+
+/**
+ * A plan's readings whose day went by unread, as of `today`, dealt with as the person says (`missed`): left
+ * where they are, moved to today, or the rest of the book planned again from the first of them, from today.
+ */
+export async function catchUp(
+	ctx: MutationCtx,
+	plan: Doc<'readingPlans'>,
+	today: YMD,
+	missed: MissedReadings
+) {
+	if (missed === 'leave') return;
+	const late = await ctx.db
+		.query('readings')
+		.withIndex('by_planId_and_read_and_date', (q) =>
+			q.eq('planId', plan._id).eq('read', false).lt('date', today)
+		)
+		.take(PLAN_READINGS_MAX);
+	if (!late.length) return;
+	if (missed === 'double') {
+		for (const reading of late) await ctx.db.patch('readings', reading._id, { date: today });
+		return;
+	}
+	const first = Math.min(...late.map((reading) => reading.from));
+	const { fields, rrule } = checkPlan(
+		plan.book,
+		{ ...planFields(plan), startDate: today, fromChapter: first },
+		'SU'
+	);
+	await replan(ctx, plan, fields, rrule);
 }
 
 /** Marks a reading read or not, keeping its plan's `chaptersRead` in step. Idempotent. */

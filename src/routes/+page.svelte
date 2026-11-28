@@ -9,7 +9,6 @@
 	import Check from '@lucide/svelte/icons/check';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
 	import ChevronUp from '@lucide/svelte/icons/chevron-up';
-	import BookOpen from '@lucide/svelte/icons/book-open';
 	import Plus from '@lucide/svelte/icons/plus';
 	import { api } from '#convex/_generated/api.js';
 	import type { Id } from '#convex/_generated/dataModel.js';
@@ -28,7 +27,7 @@
 	import { Detent } from '#lib/detent.svelte.js';
 	import { readingActions } from '#lib/reading-actions.js';
 	import { requestActions } from '#lib/request-actions.js';
-	import { daysArgs, requestsArgs } from '#lib/tab-queries.js';
+	import { daysArgs, readingListArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { keepScreenOn } from '#lib/wake-lock.svelte.js';
 
@@ -56,19 +55,21 @@
 	};
 	let range: Range = $derived(daysArgs(opening.spot?.day ?? start));
 	// Awaited together, with the range it answers: while a wider range loads, the days already here stay as they
-	// are. The Requests list says each one's schedule in words, and the person's week start divides the weeks;
-	// the app shell keeps both subscribed. One awaited derived, not several: updates to them land in one batch.
+	// are. The Requests and reading plan lists say each one's schedule in words, and the person's week start
+	// divides the weeks; the app shell keeps them all subscribed. One awaited derived, not several: updates to them land in one batch.
 	const loaded = $derived(await load(range));
 	function load(range: Range) {
 		return Promise.all([
 			convexQuery(api.days.range, range),
 			convexQuery(api.requests.list, requestsArgs(today.current)),
-			convexQuery(api.users.me, {})
-		]).then(([days, requests, me]) => ({ range, days, requests, me }));
+			convexQuery(api.users.me, {}),
+			convexQuery(api.reading.list, readingListArgs(today.current))
+		]).then(([days, requests, me, plans]) => ({ range, days, requests, me, plans }));
 	}
 	const me = $derived(loaded.me);
 	keepScreenOn(() => me.keepScreenOn);
 	const rows = $derived(new Map(loaded.requests.rows.map((row) => [row.requestId, row])));
+	const plans = $derived(new Map(loaded.plans.map((plan) => [plan.planId, plan])));
 	const actions = requestActions();
 	const reading = readingActions();
 
@@ -482,7 +483,7 @@
 								{done}/{due.length}
 							</span>
 						{/if}
-						{#if items.length}
+						{#if items.length || readings.length}
 							<Button
 								variant="ghost"
 								size="icon"
@@ -494,13 +495,9 @@
 							</Button>
 						{/if}
 					</div>
-					{#if items.length}
-						<ul
-							class={[
-								'divide-y divide-border overflow-hidden rounded-xl border bg-card',
-								isToday && 'border-candle/25'
-							]}
-						>
+					{#if items.length || readings.length}
+						<!-- Plain rows on the page, the day's requests and then its Bible reading, in one list. -->
+						<ul class="divide-y divide-border">
 							{#each items as item (item.requestId)}
 								<li transition:slide={{ duration: 150 }}>
 									<DayItem
@@ -511,6 +508,17 @@
 										{actions}
 										weekStart={me.weekStart}
 										onedit={() => edit(item.requestId)}
+									/>
+								</li>
+							{/each}
+							{#each readings as r (r.readingId)}
+								<li transition:slide={{ duration: 150 }}>
+									<DayReading
+										reading={r}
+										date={day}
+										repeats={plans.get(r.planId)?.repeats}
+										href={resolve('/requests/reading/[planId]', { planId: r.planId })}
+										actions={reading}
 									/>
 								</li>
 							{/each}
@@ -525,34 +533,6 @@
 							<Plus class="size-4" />
 							Add a request
 						</button>
-					{/if}
-					{#if readings.length}
-						<!-- Bible reading: its own list, below the day's requests. -->
-						<div class="mt-3" transition:slide={{ duration: 150 }}>
-							<p
-								class="mb-1.5 flex items-center gap-1.5 px-1 text-xs font-medium tracking-wide text-muted-foreground uppercase"
-							>
-								<BookOpen class="size-3.5" aria-hidden="true" />
-								Bible reading
-							</p>
-							<ul
-								class={[
-									'divide-y divide-border overflow-hidden rounded-xl border bg-card',
-									isToday && 'border-candle/25'
-								]}
-							>
-								{#each readings as r (r.readingId)}
-									<li transition:slide={{ duration: 150 }}>
-										<DayReading
-											reading={r}
-											date={day}
-											href={resolve('/requests/reading/[planId]', { planId: r.planId })}
-											actions={reading}
-										/>
-									</li>
-								{/each}
-							</ul>
-						</div>
 					{/if}
 				</section>
 			{/each}

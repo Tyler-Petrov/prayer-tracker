@@ -2,11 +2,12 @@
 	import { goto } from '$app/navigation';
 	import { useConvexClient } from 'convex-svelte';
 	import BookOpen from '@lucide/svelte/icons/book-open';
+	import Repeat from '@lucide/svelte/icons/repeat';
 	import ExternalLink from '@lucide/svelte/icons/square-arrow-out-up-right';
 	import Undo2 from '@lucide/svelte/icons/undo-2';
 	import { api } from '#convex/_generated/api.js';
 	import type { DayReading } from '#convex/days.js';
-	import { chapterCount, passageLabel } from '#convex/shared/bible.js';
+	import { passageLabel } from '#convex/shared/bible.js';
 	import CheckMark from '#lib/components/check-mark.svelte';
 	import * as ContextMenu from '#lib/components/ui/context-menu/index.js';
 	import { prefetchQuery } from '#lib/convex-query.svelte.js';
@@ -17,12 +18,15 @@
 	let {
 		reading,
 		date,
+		repeats,
 		href,
 		actions
 	}: {
 		reading: DayReading;
 		/** The day it's listed on. */
 		date: string;
+		/** How often its plan is read, in words ("Every day"), from the reading plan list. */
+		repeats: string | undefined;
 		/** Its plan's page. */
 		href: string;
 		actions: ReadingActions;
@@ -43,8 +47,7 @@
 <ContextMenu.Root onOpenChange={(open) => open && (pressOpened = true)}>
 	<ContextMenu.Trigger
 		class={[
-			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40',
-			reading.read && 'bg-sage/5'
+			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40'
 		]}
 		onpointerdowncapture={() => (pressOpened = false)}
 		onkeydowncapture={() => (pressOpened = false)}
@@ -60,30 +63,32 @@
 				type="button"
 				aria-pressed={reading.read}
 				aria-label="Read {label}"
-				class="group grid w-14 shrink-0 place-items-center rounded-l-xl focus-visible:outline-none [&:focus-visible>span]:ring-3 [&:focus-visible>span]:ring-ring/50"
+				class="group grid w-10 shrink-0 place-items-center justify-items-start focus-visible:outline-none [&:focus-visible>span]:ring-3 [&:focus-visible>span]:ring-ring/50"
 				onclick={() => void actions.read(reading, !reading.read)}
 			>
 				<CheckMark checked={reading.read} />
 			</button>
-		{:else}
-			<span class="w-4 shrink-0" aria-hidden="true"></span>
 		{/if}
 		<a
 			{href}
-			class="flex min-h-14 min-w-0 flex-1 flex-col justify-center py-2.5 pr-4 text-left focus-visible:outline-none"
+			class="flex min-h-11 min-w-0 flex-1 items-center gap-3 py-2.5 text-left focus-visible:outline-none"
 			onpointerenter={prefetch}
 			onpointerdown={prefetch}
 		>
-			<span class={['leading-snug break-words', reading.read && 'text-muted-foreground']}>
+			<span
+				class={['min-w-0 flex-1 leading-snug break-words', reading.read && 'text-muted-foreground']}
+			>
 				{label}
 			</span>
-			<span class="mt-0.5 text-xs text-muted-foreground">
-				{#if reading.read}
-					<span class="text-sage">Read</span>
-					<span aria-hidden="true">·</span>
-				{/if}
-				{chapterCount(reading.to - reading.from + 1)}
-			</span>
+			{#if repeats}
+				<span
+					class="inline-flex max-w-1/2 shrink-0 items-center gap-1 text-xs text-muted-foreground"
+				>
+					<Repeat class="size-3 shrink-0" aria-hidden="true" /><span class="truncate"
+						>{repeats}</span
+					>
+				</span>
+			{/if}
 		</a>
 	</ContextMenu.Trigger>
 	<ContextMenu.Content side="bottom" align="start" collisionPadding={8} class="w-56">

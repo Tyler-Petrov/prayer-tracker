@@ -3,7 +3,7 @@ import { convexTest } from 'convex-test';
 import { describe, expect, test } from 'vitest';
 import { api } from './_generated/api';
 import schema from './schema';
-import type { ReadingPlanFields } from './shared/bible';
+import type { MissedReadings, ReadingPlanFields } from './shared/bible';
 
 const modules = import.meta.glob('./**/*.ts');
 
@@ -131,6 +131,57 @@ describe('reading plans', () => {
 			['2026-11-26', 1, 2],
 			['2026-11-27', 5, 6]
 		]);
+	});
+
+	describe('when a day goes by unread', () => {
+		// Ruth, a chapter a day from Thursday; on Saturday, Ruth 1 and 2 haven't been read.
+		async function behindOnRuth(missedReadings?: MissedReadings) {
+			const t = convexTest(schema, modules);
+			const ann = await signedIn(t, 'ann');
+			if (missedReadings) await ann.mutation(api.users.setMissedReadings, { missedReadings });
+			const fields = { ...twoADay, chaptersPerDay: 1 };
+			const planId = await ann.mutation(api.reading.create, { book: 'Ruth', fields });
+			await ann.mutation(api.reading.catchUp, { today: '2026-11-28' });
+			// A second time finds nothing more to do.
+			await ann.mutation(api.reading.catchUp, { today: '2026-11-28' });
+			const plan = await ann.query(api.reading.get, { planId, today: '2026-11-28' });
+			return { ann, plan: plan!, dates: plan!.readings.map((r) => [r.date, r.from]) };
+		}
+
+		test('leave them on their days, and carry on with today', async () => {
+			const { plan, dates } = await behindOnRuth('leave');
+			expect(dates).toEqual([
+				['2026-11-26', 1],
+				['2026-11-27', 2],
+				['2026-11-28', 3],
+				['2026-11-29', 4]
+			]);
+			expect(plan).toMatchObject({ behind: 2, fields: { fromChapter: 1 } });
+		});
+
+		test('move them to today, to read with it', async () => {
+			const { ann, plan, dates } = await behindOnRuth('double');
+			expect(dates).toEqual([
+				['2026-11-28', 1],
+				['2026-11-28', 2],
+				['2026-11-28', 3],
+				['2026-11-29', 4]
+			]);
+			expect(plan).toMatchObject({ behind: 0, lastDate: '2026-11-29' });
+			const [today] = await ann.query(api.days.range, { from: '2026-11-28', to: '2026-11-28' });
+			expect(today.readings.map((r) => r.from)).toEqual([1, 2, 3]);
+		});
+
+		test('or, unless the person says otherwise, carry on from the first of them today and finish later', async () => {
+			const { plan, dates } = await behindOnRuth();
+			expect(dates).toEqual([
+				['2026-11-28', 1],
+				['2026-11-29', 2],
+				['2026-11-30', 3],
+				['2026-12-01', 4]
+			]);
+			expect(plan).toMatchObject({ behind: 0, chaptersTotal: 4 });
+		});
 	});
 
 	test("are each person's own, and go with their readings when deleted", async () => {

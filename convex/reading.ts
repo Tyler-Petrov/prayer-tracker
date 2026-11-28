@@ -6,6 +6,7 @@ import { internal } from './_generated/api';
 import { internalMutation } from './_generated/server';
 import { assertDate, getOwned, userMutation, userQuery } from './functions';
 import {
+	catchUp as catchUpPlan,
 	checkPlan,
 	deleteReadingBatch,
 	PLAN_READINGS_MAX,
@@ -15,7 +16,7 @@ import {
 } from './model/reading';
 import { vReadingPlanFields } from './schema';
 
-/** Plans listed on the Requests tab. */
+/** Plans listed on Overview. */
 const PLANS_MAX = 100;
 
 /**
@@ -108,6 +109,27 @@ export const update = userMutation({
 		const plan = await getOwned(ctx, ctx.userId, 'readingPlans', args.planId);
 		const { fields, rrule } = checkPlan(plan.book, args.fields, ctx.user.weekStart ?? 'SU');
 		await replan(ctx, plan, fields, rrule);
+		return null;
+	}
+});
+
+/**
+ * Deals with readings whose day went by unread, as of `today`, in each of the caller's plans, as their setting
+ * says (`missedReadings`, 'push' when unset). The app calls it when a plan has fallen behind and the setting
+ * isn't 'leave'; a second call finds nothing to do.
+ */
+export const catchUp = userMutation({
+	args: { today: v.string() },
+	returns: v.null(),
+	handler: async (ctx, { today }) => {
+		assertDate(today);
+		const plans = await ctx.db
+			.query('readingPlans')
+			.withIndex('by_userId', (q) => q.eq('userId', ctx.userId))
+			.order('desc')
+			.take(PLANS_MAX);
+		const missed = ctx.user.missedReadings ?? 'push';
+		for (const plan of plans) await catchUpPlan(ctx, plan, today, missed);
 		return null;
 	}
 });

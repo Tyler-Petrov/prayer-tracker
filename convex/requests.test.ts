@@ -376,7 +376,8 @@ describe('editing', () => {
 		expect(await ann.query(api.users.me, {})).toEqual({
 			email: 'ann@example.com',
 			weekStart: 'SU',
-			keepScreenOn: true
+			keepScreenOn: true,
+			missedReadings: 'push'
 		});
 		await ann.mutation(api.users.setWeekStart, { weekStart: 'MO' });
 		const requestId = await ann.mutation(api.requests.create, {

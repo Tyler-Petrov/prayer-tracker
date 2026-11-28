@@ -71,12 +71,17 @@ people's emails.
   Back to it opens where it was left. The header's Today button and date picker keep the day they jump to in
   page state, not the URL. Pass the person's week start to every `dayName`/`weekLabel` (it's required).
   Items: `src/lib/components/days/`.
-- **Requests** (`/requests`, `/requests/[requestId]`) and the request editor sheet
+- **Overview** (`/overview`, the second tab): `overview.stats` counts answered requests, days prayed over the
+  last 30 and the run of them, and chapters and books read; below it, the reading plans and a link to all
+  requests. The request and plan pages live under `/requests` and keep the tab lit.
+- **Requests** (`/requests`, the full list, from Overview; `/requests/[requestId]`) and the request editor sheet
   (`src/lib/components/requests/request-editor.svelte`, used for adding and editing everywhere).
 - **Bible reading**: a `readingPlans` row (book, chapters each time, where they are, a recurrence rule) and one
   `readings` row per scheduled day until the book ends. `convex/shared/bible.ts` has the books and plans the
   readings (the editor's preview uses it too); changing a plan keeps readings already read and plans the rest
-  again (`replan` in `convex/model/reading.ts`). Shown under the requests on Days and on `/requests`, each plan
+  again (`replan` in `convex/model/reading.ts`). Readings whose day went by unread are pushed back, moved to
+  today, or left where they are, as the person's setting says (`users.missedReadings`, Settings; pushing back
+  is the default); the app shell calls `reading.catchUp` when a plan falls behind. Shown after the requests on Days and on Overview, each plan
   at `/requests/reading/[planId]`; quick actions in `src/lib/reading-actions.ts`.
 - **Optimistic updates** for the request mutations are in `src/lib/optimistic.ts`; `src/lib/request-actions.ts`
   wraps the quick actions (prayed, skip a day, answer, delete) with them and with toasts.

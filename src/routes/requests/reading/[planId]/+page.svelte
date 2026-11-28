@@ -38,7 +38,7 @@
 	);
 	const actions = readingActions();
 
-	// Back goes where it came from: the Days tab, or the Requests tab (also when opened directly).
+	// Back goes where it came from: the Days tab, or Overview (also when opened directly).
 	let fromDays = $state(false);
 	afterNavigate(({ from, type }) => {
 		if (type === 'enter') fromDays = false;
@@ -47,7 +47,7 @@
 	const back = $derived(
 		fromDays
 			? { href: resolve('/'), label: 'Days' }
-			: { href: resolve('/requests'), label: 'Requests' }
+			: { href: resolve('/overview'), label: 'Overview' }
 	);
 
 	const description = $derived.by(() => {
@@ -174,7 +174,7 @@
 			</div>
 		</section>
 
-		{#if plan.behind && plan.next}
+		{#if plan.behind && plan.next && me.missedReadings === 'leave'}
 			<section
 				class="flex flex-col gap-3 rounded-xl border border-candle/30 bg-candle/8 px-4 py-3 sm:flex-row sm:items-center"
 				aria-label="Behind"
@@ -270,7 +270,7 @@
 		</AlertDialog.Content>
 	</AlertDialog.Root>
 {:else if !deleting}
-	<PageHeader title="Reading" back={{ href: resolve('/requests'), label: 'Requests' }} />
+	<PageHeader title="Reading" back={{ href: resolve('/overview'), label: 'Overview' }} />
 	<div class="page-column">
 		<Empty.Root class="border">
 			<Empty.Header>
@@ -279,8 +279,7 @@
 				<Empty.Description>It may have been deleted, or the link is wrong.</Empty.Description>
 			</Empty.Header>
 			<Empty.Content>
-				<Button href={resolve('/requests')} variant="outline" class="h-11 px-4">All requests</Button
-				>
+				<Button href={resolve('/overview')} variant="outline" class="h-11 px-4">Overview</Button>
 			</Empty.Content>
 		</Empty.Root>
 	</div>

@@ -13,6 +13,7 @@ import type * as functions from "../functions.js";
 import type * as model_prayers from "../model/prayers.js";
 import type * as model_reading from "../model/reading.js";
 import type * as model_requests from "../model/requests.js";
+import type * as overview from "../overview.js";
 import type * as prayers from "../prayers.js";
 import type * as reading from "../reading.js";
 import type * as requests from "../requests.js";
@@ -33,6 +34,7 @@ declare const fullApi: ApiFromModules<{
   "model/prayers": typeof model_prayers;
   "model/reading": typeof model_reading;
   "model/requests": typeof model_requests;
+  overview: typeof overview;
   prayers: typeof prayers;
   reading: typeof reading;
   requests: typeof requests;
