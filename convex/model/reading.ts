@@ -132,7 +132,7 @@ export async function replan(
 
 /**
  * A plan's readings whose day went by unread, as of `today`, dealt with as the person says (`missed`): left
- * where they are, moved to today, or the rest of the book planned again from the first of them, from today.
+ * where they are, moved to today, or the rest of the book planned again from today, from the first chapter not read.
  */
 export async function catchUp(
 	ctx: MutationCtx,
@@ -152,7 +152,13 @@ export async function catchUp(
 		for (const reading of late) await ctx.db.patch('readings', reading._id, { date: today });
 		return;
 	}
-	const first = Math.min(...late.map((reading) => reading.from));
+	// From the first chapter not read, which can be on a later day than the missed ones (read ahead and then
+	// unchecked): replan drops every unread reading, so starting at the first missed one would lose it.
+	const unread = await ctx.db
+		.query('readings')
+		.withIndex('by_planId_and_read_and_date', (q) => q.eq('planId', plan._id).eq('read', false))
+		.take(PLAN_READINGS_MAX);
+	const first = Math.min(...unread.map((reading) => reading.from));
 	const { fields, rrule } = checkPlan(
 		plan.book,
 		{ ...planFields(plan), startDate: today, fromChapter: first },

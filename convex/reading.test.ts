@@ -184,6 +184,32 @@ describe('reading plans', () => {
 		});
 	});
 
+	test('pushing back keeps a chapter read ahead and then unchecked', async () => {
+		const t = convexTest(schema, modules);
+		const ann = await signedIn(t, 'ann');
+		const fields = { ...twoADay, chaptersPerDay: 1, startDate: '2026-11-30' };
+		const planId = await ann.mutation(api.reading.create, { book: 'Ruth', fields });
+		const plan = await ann.query(api.reading.get, { planId, today: '2026-11-26' });
+		const ruth1 = plan!.readings[0];
+		await ann.mutation(api.reading.setRead, { readingId: ruth1.readingId, read: true });
+		// The rest moved earlier, around Ruth 1 on the 30th; then Ruth 1 is unchecked.
+		await ann.mutation(api.reading.update, {
+			planId,
+			fields: { ...fields, startDate: '2026-11-26', fromChapter: 2 }
+		});
+		await ann.mutation(api.reading.setRead, { readingId: ruth1.readingId, read: false });
+
+		await ann.mutation(api.reading.catchUp, { today: '2026-11-28' });
+		const after = await ann.query(api.reading.get, { planId, today: '2026-11-28' });
+		expect(after!.readings.map((r) => [r.date, r.from])).toEqual([
+			['2026-11-28', 1],
+			['2026-11-29', 2],
+			['2026-11-30', 3],
+			['2026-12-01', 4]
+		]);
+		expect(after).toMatchObject({ chaptersTotal: 4, behind: 0 });
+	});
+
 	test("are each person's own, and go with their readings when deleted", async () => {
 		const t = convexTest(schema, modules);
 		const ann = await signedIn(t, 'ann');
