@@ -12,10 +12,11 @@
 	import Plus from '@lucide/svelte/icons/plus';
 	import { api } from '#convex/_generated/api.js';
 	import type { Id } from '#convex/_generated/dataModel.js';
-	import type { DayItem as Item } from '#convex/days.js';
+	import type { DayItem as Item, DayReading as Reading } from '#convex/days.js';
 	import { addDays, daysBetween, isDate, MAX_RANGE_DAYS } from '#convex/shared/recurrence.js';
 	import { weekStart } from '#convex/shared/weeks.js';
 	import DayItem from '#lib/components/days/day-item.svelte';
+	import DayReading from '#lib/components/days/day-reading.svelte';
 	import RequestEditor, { type EditorTarget } from '#lib/components/requests/request-editor.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Calendar } from '#lib/components/ui/calendar/index.js';
@@ -24,8 +25,9 @@
 	import { dayName, formatDay, isDay, weekLabel } from '#lib/dates.js';
 	import { daysView } from '#lib/days-view.svelte.js';
 	import { Detent } from '#lib/detent.svelte.js';
+	import { readingActions } from '#lib/reading-actions.js';
 	import { requestActions } from '#lib/request-actions.js';
-	import { daysArgs, requestsArgs } from '#lib/tab-queries.js';
+	import { daysArgs, readingListArgs, requestsArgs } from '#lib/tab-queries.js';
 	import { today } from '#lib/today.svelte.js';
 	import { keepScreenOn } from '#lib/wake-lock.svelte.js';
 
@@ -53,20 +55,23 @@
 	};
 	let range: Range = $derived(daysArgs(opening.spot?.day ?? start));
 	// Awaited together, with the range it answers: while a wider range loads, the days already here stay as they
-	// are. The Requests list says each one's schedule in words, and the person's week start divides the weeks;
-	// the app shell keeps both subscribed. One awaited derived, not several: updates to them land in one batch.
+	// are. The Requests and reading plan lists say each one's schedule in words, and the person's week start
+	// divides the weeks; the app shell keeps them all subscribed. One awaited derived, not several: updates to them land in one batch.
 	const loaded = $derived(await load(range));
 	function load(range: Range) {
 		return Promise.all([
 			convexQuery(api.days.range, range),
 			convexQuery(api.requests.list, requestsArgs(today.current)),
-			convexQuery(api.users.me, {})
-		]).then(([days, requests, me]) => ({ range, days, requests, me }));
+			convexQuery(api.users.me, {}),
+			convexQuery(api.reading.list, readingListArgs(today.current))
+		]).then(([days, requests, me, plans]) => ({ range, days, requests, me, plans }));
 	}
 	const me = $derived(loaded.me);
 	keepScreenOn(() => me.keepScreenOn);
 	const rows = $derived(new Map(loaded.requests.rows.map((row) => [row.requestId, row])));
+	const plans = $derived(new Map(loaded.plans.map((plan) => [plan.planId, plan])));
 	const actions = requestActions();
+	const reading = readingActions();
 
 	/** Set while the page scrolls, and for a moment after. */
 	let scrolling = $state(false);
@@ -97,18 +102,19 @@
 		const { from, to } = shown.range;
 		return Array.from({ length: daysBetween(from, to) + 1 }, (_, i) => addDays(from, i));
 	});
-	// Each day's requests. A day's list is reused while its requests are unchanged, so it isn't touched when
-	// other days change (days added above, a check on another day).
-	type DayList = { json: string; items: Item[] };
+	// Each day's requests and Bible readings. A day's lists are reused while they're unchanged, so it isn't
+	// touched when other days change (days added above, a check on another day).
+	type DayList = { json: string; items: Item[]; readings: Reading[] };
 	let lists = new Map<string, DayList>();
 	const byDay = $derived.by(() => {
-		const found = new Map((shown?.days ?? []).map((day) => [day.date, day.items]));
+		const found = new Map((shown?.days ?? []).map((day) => [day.date, day]));
 		const next = new Map(
 			dates.map((date): [string, DayList] => {
-				const items = found.get(date) ?? [];
-				const json = JSON.stringify(items);
+				const items = found.get(date)?.items ?? [];
+				const readings = found.get(date)?.readings ?? [];
+				const json = JSON.stringify([items, readings]);
 				const old = lists.get(date);
-				return [date, old?.json === json ? old : { json, items }];
+				return [date, old?.json === json ? old : { json, items, readings }];
 			})
 		);
 		lists = next;
@@ -426,6 +432,7 @@
 			{#key shown.range}<div {@attach near(() => grow('from'))}></div>{/key}
 			{#each dates as day (day)}
 				{@const items = byDay.get(day)!.items}
+				{@const readings = byDay.get(day)!.readings}
 				{@const isToday = day === today.current}
 				{@const due = items.filter((i) => !i.skipped)}
 				{@const done = due.filter((i) => i.prayed).length}
@@ -476,7 +483,7 @@
 								{done}/{due.length}
 							</span>
 						{/if}
-						{#if items.length}
+						{#if items.length || readings.length}
 							<Button
 								variant="ghost"
 								size="icon"
@@ -488,13 +495,9 @@
 							</Button>
 						{/if}
 					</div>
-					{#if items.length}
-						<ul
-							class={[
-								'divide-y divide-border overflow-hidden rounded-xl border bg-card',
-								isToday && 'border-candle/25'
-							]}
-						>
+					{#if items.length || readings.length}
+						<!-- Plain rows on the page, the day's requests and then its Bible reading, in one list. -->
+						<ul class="divide-y divide-border">
 							{#each items as item (item.requestId)}
 								<li transition:slide={{ duration: 150 }}>
 									<DayItem
@@ -505,6 +508,17 @@
 										{actions}
 										weekStart={me.weekStart}
 										onedit={() => edit(item.requestId)}
+									/>
+								</li>
+							{/each}
+							{#each readings as r (r.readingId)}
+								<li transition:slide={{ duration: 150 }}>
+									<DayReading
+										reading={r}
+										date={day}
+										repeats={plans.get(r.planId)?.repeats}
+										href={resolve('/requests/reading/[planId]', { planId: r.planId })}
+										actions={reading}
 									/>
 								</li>
 							{/each}

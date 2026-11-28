@@ -8,7 +8,8 @@
 		min = 1,
 		max = 100,
 		noun,
-		before
+		before,
+		name
 	}: {
 		value: number;
 		min?: number;
@@ -17,6 +18,8 @@
 		noun: string;
 		/** Words before the number: "Every" reads "Every 9 days". */
 		before?: string;
+		/** What the − and + buttons change, when it isn't `noun` ("Fewer chapters" for "Chapter 3 of 16"). */
+		name?: string;
 	} = $props();
 
 	const label = $derived(value === 1 ? noun.replace(/s$/, '') : noun);
@@ -31,7 +34,7 @@
 		variant="ghost"
 		size="icon"
 		class="size-10 rounded-full"
-		aria-label="Fewer {noun}"
+		aria-label="Fewer {name ?? noun}"
 		disabled={value <= min}
 		onclick={() => (value = Math.max(min, value - 1))}
 	>
@@ -65,7 +68,7 @@
 		variant="ghost"
 		size="icon"
 		class="size-10 rounded-full"
-		aria-label="More {noun}"
+		aria-label="More {name ?? noun}"
 		disabled={value >= max}
 		onclick={() => (value = Math.min(max, value + 1))}
 	>

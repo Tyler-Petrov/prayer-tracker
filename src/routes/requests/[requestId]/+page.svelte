@@ -50,17 +50,19 @@
 	);
 	const actions = requestActions();
 
-	// Back goes where it came from: the Days tab (always, for a day's page), or the list (also when opened
-	// directly).
-	let fromDays = $state(false);
+	// Back goes where it came from: the Days tab (always, for a day's page), Overview, or the list (also when
+	// opened directly).
+	let fromRoute = $state<string>();
 	afterNavigate(({ from, type }) => {
-		if (type === 'enter') fromDays = false;
-		else if (from?.route.id) fromDays = from.route.id === '/';
+		if (type === 'enter') fromRoute = undefined;
+		else if (from?.route.id) fromRoute = from.route.id;
 	});
 	const back = $derived(
-		fromDays || dayParam
+		fromRoute === '/' || dayParam
 			? { href: resolve('/'), label: 'Days' }
-			: { href: resolve('/requests'), label: 'Requests' }
+			: fromRoute === '/overview'
+				? { href: resolve('/overview'), label: 'Overview' }
+				: { href: resolve('/requests'), label: 'Requests' }
 	);
 
 	const target = $derived(request && { requestId, title: request.title });

@@ -1,4 +1,4 @@
-// The Days tab: what's prayed for on each day of a range.
+// The Days tab: what's prayed for, and what's read in the Bible, on each day of a range.
 //
 // Recurrence is expanded here on the server (shared/recurrence.ts), not in the browser: the client gets plain
 // rows per day that optimistic updates can patch (lib/optimistic.ts), skips and answers are applied in one
@@ -8,6 +8,7 @@
 import { ConvexError, v } from 'convex/values';
 import type { Doc, Id } from './_generated/dataModel';
 import { assertDate, userQuery } from './functions';
+import { BOOKS } from './shared/bible';
 import { daysBetween, MAX_RANGE_DAYS, occurrences, OPEN_END, type YMD } from './shared/recurrence';
 
 /** Requests read per index range: more than this many reaching one range is an error, not a cut. */
@@ -17,6 +18,8 @@ const REQUESTS_MAX = 1000;
  * leave the latest days looking unprayed.
  */
 const PRAYERS_MAX = 8000;
+/** Bible readings read for one range: a few plans a day across MAX_RANGE_DAYS. */
+const READINGS_MAX = 2000;
 
 export type DayItem = {
 	requestId: Id<'requests'>;
@@ -32,10 +35,23 @@ export type DayItem = {
 	answeredOn: YMD | null;
 };
 
+const bookOrder = (book: string) => BOOKS.findIndex(([name]) => name === book);
+
+/** A Bible reading on a day (reading.ts): chapters `from` through `to` of `book`. */
+export type DayReading = {
+	readingId: Id<'readings'>;
+	planId: Id<'readingPlans'>;
+	book: string;
+	from: number;
+	to: number;
+	read: boolean;
+};
+
 /**
  * The days `from` through `to` (YYYY-MM-DD, inclusive, at most MAX_RANGE_DAYS) that have anything on them, in
  * order, each with its requests in the order they were added: those scheduled that day (skipped ones flagged)
- * plus any marked prayed on a day their schedule doesn't have. Days with nothing are left out.
+ * plus any marked prayed on a day their schedule doesn't have, and the day's Bible readings (`readings`, in the
+ * Bible's order). Days with nothing are left out.
  */
 export const range = userQuery({
 	args: { from: v.string(), to: v.string() },
@@ -72,6 +88,17 @@ export const range = userQuery({
 			.take(PRAYERS_MAX + 1);
 		if (prayers.length > PRAYERS_MAX)
 			throw new ConvexError('Too many prayed marks on these days to show them; ask for fewer days');
+
+		const readings = await ctx.db
+			.query('readings')
+			.withIndex('by_userId_and_date', (q) =>
+				q.eq('userId', ctx.userId).gte('date', from).lte('date', to)
+			)
+			.take(READINGS_MAX + 1);
+		if (readings.length > READINGS_MAX)
+			throw new ConvexError(
+				'Too many Bible readings on these days to show them; ask for fewer days'
+			);
 
 		const byId = new Map<Id<'requests'>, Doc<'requests'>>(requests.map((r) => [r._id, r]));
 		// Marks on requests outside the range's requests (prayed after it was answered, say).
@@ -110,8 +137,24 @@ export const range = userQuery({
 			for (const date of marksOf.get(request._id) ?? [])
 				if (!scheduled.has(date)) add(date, request, false, false);
 		}
+		const readingsOn = new Map<YMD, DayReading[]>();
+		for (const reading of readings.sort(
+			(a, b) => bookOrder(a.book) - bookOrder(b.book) || a.from - b.from
+		)) {
+			if (!days.has(reading.date)) days.set(reading.date, []);
+			let list = readingsOn.get(reading.date);
+			if (!list) readingsOn.set(reading.date, (list = []));
+			list.push({
+				readingId: reading._id,
+				planId: reading.planId,
+				book: reading.book,
+				from: reading.from,
+				to: reading.to,
+				read: reading.read
+			});
+		}
 		return [...days.entries()]
 			.sort(([a], [b]) => a.localeCompare(b))
-			.map(([date, items]) => ({ date, items }));
+			.map(([date, items]) => ({ date, items, readings: readingsOn.get(date) ?? [] }));
 	}
 });

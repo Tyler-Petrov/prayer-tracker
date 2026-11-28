@@ -42,6 +42,7 @@
 
 	const on = $derived(dayName(date, today.current, weekStart, true));
 	const answeredHere = $derived(item.answeredOn === date);
+	const answeredBefore = $derived(item.answeredOn !== null && item.answeredOn < date);
 	// A day that hasn't come yet can't be prayed for: no check. One already marked keeps it, to take it back.
 	const checkable = $derived(date <= today.current || item.prayed);
 
@@ -72,8 +73,7 @@
 <ContextMenu.Root onOpenChange={(open) => open && (pressOpened = true)}>
 	<ContextMenu.Trigger
 		class={[
-			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40',
-			item.prayed && 'bg-sage/5'
+			'flex items-stretch transition-colors [-webkit-touch-callout:none] hover:bg-accent/40 has-[a:focus-visible]:bg-accent/40'
 		]}
 		onpointerdowncapture={() => (pressOpened = false)}
 		onkeydowncapture={() => (pressOpened = false)}
@@ -84,20 +84,18 @@
 			e.stopPropagation();
 		}}
 	>
-		{#if !checkable}
-			<!-- Ahead of today: nothing to check yet, so the title starts where the check would. -->
-			<span class="w-4 shrink-0" aria-hidden="true"></span>
-		{:else if item.skipped}
+		<!-- Ahead of today there's nothing to check yet, so the title starts at the edge. -->
+		{#if checkable && item.skipped}
 			<!-- Skipped: nothing to check; the page or menu brings it back. -->
-			<span class="grid w-14 shrink-0 place-items-center" aria-hidden="true">
+			<span class="grid w-10 shrink-0 place-items-center justify-items-start" aria-hidden="true">
 				<span class="size-6 rounded-full border-2 border-dashed border-muted-foreground/40"></span>
 			</span>
-		{:else}
+		{:else if checkable}
 			<button
 				type="button"
 				aria-pressed={item.prayed}
 				aria-label="Prayed for {item.title}"
-				class="group grid w-14 shrink-0 place-items-center rounded-l-xl focus-visible:outline-none [&:focus-visible>span]:ring-3 [&:focus-visible>span]:ring-ring/50"
+				class="group grid w-10 shrink-0 place-items-center justify-items-start focus-visible:outline-none [&:focus-visible>span]:ring-3 [&:focus-visible>span]:ring-ring/50"
 				onclick={() => prayed(!item.prayed, false)}
 			>
 				<CheckMark checked={item.prayed} />
@@ -105,37 +103,38 @@
 		{/if}
 		<a
 			{href}
-			class="flex min-h-16 min-w-0 flex-1 flex-col justify-center py-3 pr-4 text-left focus-visible:outline-none"
+			class="flex min-h-11 min-w-0 flex-1 items-center gap-3 py-2.5 text-left focus-visible:outline-none"
 			onpointerenter={prefetch}
 			onpointerdown={prefetch}
 		>
 			<span
 				class={[
-					'leading-snug break-words',
+					'min-w-0 flex-1 leading-snug break-words',
 					(item.prayed || item.skipped) && 'text-muted-foreground',
 					item.skipped && 'line-through decoration-muted-foreground/60'
 				]}
 			>
 				{item.title}
 			</span>
-			<span class="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted-foreground">
+			<!-- On the right, on the title's line: the check says prayed, so only what it doesn't. -->
+			<span
+				class="flex max-w-1/2 shrink-0 flex-wrap items-center justify-end gap-x-1.5 text-right text-xs text-muted-foreground"
+			>
 				{#if item.skipped}
 					<span>Skipped {on}</span>
-				{:else if item.prayed}
-					<span class="text-sage">Prayed</span>
 				{/if}
 				{#if answeredHere}
-					{#if item.skipped || item.prayed}<span aria-hidden="true">·</span>{/if}
+					{#if item.skipped}<span aria-hidden="true">·</span>{/if}
 					<span class="text-lavender">Answered</span>
-				{:else if item.answeredOn && item.answeredOn < date}
-					{#if item.skipped || item.prayed}<span aria-hidden="true">·</span>{/if}
-					<span class="text-lavender">Answered {shortDate(item.answeredOn, today.current)}</span>
+				{:else if answeredBefore}
+					{#if item.skipped}<span aria-hidden="true">·</span>{/if}
+					<span class="text-lavender">Answered {shortDate(item.answeredOn!, today.current)}</span>
 				{/if}
 				{#if !item.scheduled}
-					<span aria-hidden="true">·</span>
+					{#if item.skipped || answeredHere || answeredBefore}<span aria-hidden="true">·</span>{/if}
 					<span>Not scheduled this day</span>
 				{:else if item.recurring && summary}
-					{#if item.skipped || item.prayed || item.answeredOn}<span aria-hidden="true">·</span>{/if}
+					{#if item.skipped || answeredHere || answeredBefore}<span aria-hidden="true">·</span>{/if}
 					<span class="inline-flex items-center gap-1">
 						<Repeat class="size-3" aria-hidden="true" />{summary}
 					</span>

@@ -19,7 +19,7 @@ export const TITLE_MAX = 200;
 export const NOTES_MAX = 5000;
 export const SKIPS_MAX = 1000;
 
-/** Which list a request sits in on the Requests tab. */
+/** Which list a request sits in on the Requests list. */
 export type Section = 'active' | 'past' | 'answered';
 
 /**

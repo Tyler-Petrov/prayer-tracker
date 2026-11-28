@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { resolve } from '$app/paths';
 	import type { Snippet } from 'svelte';
 	import { slide } from 'svelte/transition';
 	import ChevronDown from '@lucide/svelte/icons/chevron-down';
@@ -20,7 +21,7 @@
 	import { today } from '#lib/today.svelte.js';
 	import { cn } from '#lib/utils.js';
 
-	// Kept subscribed by the app shell, so the tab opens at once.
+	// Kept subscribed by the app shell, so the page opens at once.
 	const [list, me] = $derived(
 		await Promise.all([
 			convexQuery(api.requests.list, requestsArgs(today.current)),
@@ -60,7 +61,7 @@
 	let editorOpen = $state(false);
 </script>
 
-<PageHeader title="Requests">
+<PageHeader title="Requests" back={{ href: resolve('/overview'), label: 'Overview' }}>
 	{#snippet actions()}
 		{#if requests.length}
 			<Button class="h-11 px-3" onclick={() => (editorOpen = true)}><Plus />New request</Button>

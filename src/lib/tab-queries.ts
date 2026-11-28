@@ -6,11 +6,23 @@ import { addDays } from '#convex/shared/weeks.js';
 /** Days: the days around `day`, which the page opens on; scrolling widens them (at most MAX_RANGE_DAYS). */
 export const daysArgs = (day: string) => ({ from: addDays(day, -7), to: addDays(day, 14) });
 
-/** Requests: every request, as of today (which sets each one's next date and section). */
+/** All requests (from Overview): every request, as of today (which sets each one's next date and section). */
 export const requestsArgs = (today: string) => ({ today });
 
 /** A request's page, as of today. */
 export const requestArgs = <Id extends string>(requestId: Id, today: string) => ({
 	requestId,
+	today
+});
+
+/** Overview: the numbers, as of today. */
+export const overviewArgs = (today: string) => ({ today });
+
+/** Overview (and the Days tab's reading rows): the Bible reading plans, as of today. */
+export const readingListArgs = (today: string) => ({ today });
+
+/** A reading plan's page, as of today. */
+export const readingPlanArgs = <Id extends string>(planId: Id, today: string) => ({
+	planId,
 	today
 });

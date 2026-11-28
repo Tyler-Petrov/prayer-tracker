@@ -3,7 +3,7 @@
 import { v } from 'convex/values';
 import { mutation } from './_generated/server';
 import { requireIdentity, userMutation, userQuery } from './functions';
-import { vWeekStart } from './schema';
+import { vMissedReadings, vWeekStart } from './schema';
 
 /** The caller's user, made on their first sign-in. */
 export const ensure = mutation({
@@ -29,7 +29,8 @@ export const me = userQuery({
 	handler: async (ctx) => ({
 		email: ctx.user.email ?? null,
 		weekStart: ctx.user.weekStart ?? 'SU',
-		keepScreenOn: ctx.user.keepScreenOn !== false
+		keepScreenOn: ctx.user.keepScreenOn !== false,
+		missedReadings: ctx.user.missedReadings ?? 'push'
 	})
 });
 
@@ -47,5 +48,16 @@ export const setKeepScreenOn = userMutation({
 	returns: v.null(),
 	handler: async (ctx, { keepScreenOn }) => {
 		await ctx.db.patch('users', ctx.userId, { keepScreenOn: keepScreenOn ? undefined : false });
+	}
+});
+
+/** What reading plans do when a reading's day goes by unread (reading.catchUp). Pushing back is the default. */
+export const setMissedReadings = userMutation({
+	args: { missedReadings: vMissedReadings },
+	returns: v.null(),
+	handler: async (ctx, { missedReadings }) => {
+		await ctx.db.patch('users', ctx.userId, {
+			missedReadings: missedReadings === 'push' ? undefined : missedReadings
+		});
 	}
 });
